@@ -55,71 +55,32 @@ Built for the Agents of SigNoz Hackathon 2026. MIT licensed.
 
 ## ▶ See it in one command
 
-Gaze connects to SigNoz MCP, fetches agent traces, runs the rules engine, and issues a verdict. Every call is real, every verdict is recomputable:
+The Gaze API is running. Rules engine is stubbed — responses are placeholder until SigNoz MCP is wired:
 
 ```bash
-# Start Gaze (Foundry deploys SigNoz + the Gaze verdict service)
-foundry up
+# Start the backend
+cd backend && python gaze/server.py &
 
-# Run the verdict engine against agent traces in SigNoz
+# Health check
+curl http://localhost:8000/health
+# → {"status":"ok","engine":"gaze"}
+
+# Request a verdict (stub — returns placeholder)
 curl -X POST http://localhost:8000/verdict \
   -H "Content-Type: application/json" \
   -d '{"agent_id": "support-bot-01", "window": "1h"}'
 
-{
-  "verdict_id": "v_a7f3c91e",
-  "agent_id": "support-bot-01",
-  "timestamp": "2026-07-22T14:30:00Z",
-  "score": 94,
-  "status": "HEALTHY",
-  "verdict_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-  "rules_evaluated": 9,
-  "rules_triggered": [],
-  "evidence": []
-}
-
-# Inject a bad prompt into the agent → it starts hallucinating
-# Gaze detects repetition loop pattern in traces → verdict drops
-
-curl -X POST http://localhost:8000/verdict \
-  -H "Content-Type: application/json" \
-  -d '{"agent_id": "support-bot-01", "window": "1h"}'
-
-{
-  "verdict_id": "v_b81d4f23",
-  "agent_id": "support-bot-01",
-  "timestamp": "2026-07-22T14:35:00Z",
-  "score": 23,
-  "status": "CRITICAL",
-  "verdict_hash": "sha256:a1b2c3d4e5f6...",
-  "rules_evaluated": 9,
-  "rules_triggered": [
-    {
-      "rule": "repetition_loop",
-      "severity": "critical",
-      "evidence_span": "0x7f3a2b1c...",
-      "detail": "Agent repeated same response pattern 14 times in 3 minutes"
-    },
-    {
-      "rule": "embedding_drift",
-      "severity": "high",
-      "evidence_span": "0x8g4b5c...",
-      "detail": "Output embedding distance from baseline exceeded threshold (0.87 > 0.40)"
-    }
-  ],
-  "evidence": [...]
-}
-
-# Recomputation — same trace window, same verdict hash — deterministic proof
-$ python3 -c "
-import hashlib, json
-# Save the trace snapshot from SigNoz MCP
-# The verdict_hash is sha256(trace_snapshot + rule_set_version)
-# Anyone can recompute and verify
-"
+# Planned response shape (once SigNoz MCP is wired):
+# {
+#   "verdict_id": "v_a7f3c91e",
+#   "agent_id": "support-bot-01",
+#   "score": 94,
+#   "status": "HEALTHY",
+#   "verdict_hash": "sha256:...",
+#   "rules_evaluated": 9,
+#   "rules_triggered": []
+# }
 ```
-
-Every verdict is recomputable. Same trace window + same rule set = same hash. No LLM in the verdict path. Provable, not claimable.
 
 ---
 
@@ -286,52 +247,36 @@ All thresholds are configurable. Rule set is versioned — every threshold chang
 
 | Capability | Status |
 |---|---|
-| **Rules engine** — 9 deterministic rules, weighted scoring, versioned | **Real code** — Python dataclasses, unit tested |
-| **SigNoz MCP integration** — trace search, metrics query, dashboard import | **Real** — uses official `signoz-mcp-server` |
-| **Verdict hash** — sha256(trace_snapshot + rule_set + agent_id), recomputable | **Real** — provable, no LLM in path |
-| **OTLP verdict write-back** — verdict spans + metrics to SigNoz | **Real** — OpenTelemetry Python SDK |
-| **SigNoz dashboard** — pre-built JSON, one-click import | **Real** — `dashboards/gaze-verdict.json` |
-| **Foundry deployment** — casting.yaml + casting.yaml.lock | **Real** — reproducible setup |
-| **Demo agent** — instrumented LangChain agent for live demo | **Real** — OpenAI-powered, OTel-instrumented |
-| **FastAPI endpoints** — `/verdict`, `/agents`, `/rules`, `/history`, `/recompute` | **Real code** |
-| **Alert integration** — auto-create SigNoz alerts for score drops | **Real** — `signoz_alerts_create` via MCP |
-| **Multi-agent support** — register multiple agents, per-agent baselines | **Real code** |
-| **Auto-pause agent** — CRITICAL verdict triggers agent pause via API | **Pending** — rule engine detects, pause mechanism is config-dependent |
-| **Historical replay** — recompute verdicts for past trace windows | **Pending** — trace snapshot storage needed |
-| **Slack notification** — verdict alerts to Slack | **Pending** — webhook config |
+| **Frontend** — landing, dashboard, docs (3 routes, GSAP+Lenis, deployed) | **Live** at [gaze-omega.vercel.app](https://gaze-omega.vercel.app) |
+| **FastAPI server** — `/health`, `/verdict` endpoints with Pydantic models | **Real code** — runs on `uvicorn`, returns structured responses |
+| **Rules engine skeleton** — 9 rules as pure functions with configurable thresholds | **Real code** — `backend/gaze/rules.py`, all stubs, zero implementation |
+| **Landing page** — Fig-labeled sections, scroll reveals, architecture diagram | **Live** at `/` — kinetic orange brutalist, zero mock data |
+| **Dashboard** — fetches from API, loading/empty/error states, no hardcoded data | **Live** at `/dashboard` — real fetch, graceful degradation |
+| **Docs page** — rules reference, architecture, deployment commands, API endpoints | **Live** at `/docs` — static reference content |
+| **SigNoz MCP integration** — trace search, metrics query, dashboard import | **Roadmap** — `backend/gaze/mcp_client.py` not yet written |
+| **Rules implementation** — n-gram similarity, embedding drift, cycle detection, etc. | **Roadmap** — stubs only, no detection logic |
+| **Verdict hash** — sha256(trace_snapshot + rule_set + agent_id), recomputable | **Roadmap** — scoring function not implemented |
+| **OTLP verdict write-back** — verdict spans + metrics to SigNoz | **Roadmap** — `backend/gaze/otel_exporter.py` not yet written |
+| **SigNoz dashboard JSON** — pre-built dashboard for import | **Roadmap** — `dashboards/gaze-verdict.json` not yet created |
+| **Foundry deployment** — casting.yaml + casting.yaml.lock | **Roadmap** — no Foundry config exists |
+| **Demo agent** — instrumented LangChain agent for live demo | **Roadmap** — `demos/support_agent.py` not yet written |
+| **Tests** — pytest suite for rules, verdict, MCP | **Roadmap** — no tests written |
+| **Alert integration** — auto-create SigNoz alerts for score drops | **Roadmap** — not wired |
+| **Multi-agent support** — register multiple agents, per-agent baselines | **Roadmap** — API stub only |
 
 ---
 
 ## Tests
 
-**Rule engine tests** — deterministic, every rule has input/output pairs:
+Tests are on the roadmap. When implemented, the rule engine will be tested with deterministic input/output pairs — every rule will have at least one positive case (should trigger) and one negative case (should not trigger):
 
 ```bash
 cd gaze && python -m pytest tests/ -v
 ```
 
-```
-tests/test_rules.py::test_repetition_loop_detects_identical_responses PASSED
-tests/test_rules.py::test_repetition_loop_ignores_unique_responses PASSED
-tests/test_rules.py::test_embedding_drift_detects_divergence PASSED
-tests/test_rules.py::test_embedding_drift_normal_within_threshold PASSED
-tests/test_rules.py::test_tool_loop_detects_cycle PASSED
-tests/test_rules.py::test_unauthorized_tool_blocks_unknown PASSED
-tests/test_rules.py::test_prompt_injection_detects_dan PASSED
-tests/test_rules.py::test_prompt_injection_ignores_normal_input PASSED
-tests/test_rules.py::test_cost_explosion_detects_spike PASSED
-tests/test_rules.py::test_latency_degradation_detects_slowdown PASSED
-tests/test_rules.py::test_empty_response_detected PASSED
-tests/test_rules.py::test_hallucinated_source_detected PASSED
-tests/test_verdict.py::test_score_healthy_no_rules_triggered PASSED
-tests/test_verdict.py::test_score_critical_all_rules_triggered PASSED
-tests/test_verdict.py::test_verdict_hash_deterministic PASSED
-tests/test_verdict.py::test_verdict_hash_changes_with_different_input PASSED
-tests/test_mcp.py::test_trace_search_returns_spans PASSED
-tests/test_mcp.py::test_dashboard_import_succeeds PASSED
-```
+Planned test structure:
 
-| Test | What it proves |
+| Test | What it will prove |
 |---|---|
 | `test_repetition_loop_detects_identical_responses` | 5+ near-identical outputs trigger the rule |
 | `test_repetition_loop_ignores_unique_responses` | Normal varied output doesn't false-trigger |
@@ -350,30 +295,22 @@ tests/test_mcp.py::test_dashboard_import_succeeds PASSED
 git clone https://github.com/subheeksh5599/gaze.git
 cd gaze
 
-# Install dependencies
+# Install frontend
+cd frontend && npm install && cd ..
+
+# Run the backend (requires SigNoz self-hosted for real verdicts)
+cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+python gaze/server.py
 
-# Deploy SigNoz via Foundry (if not already running)
-foundry up
+# In another terminal, run the frontend
+cd frontend && npm run dev
 
-# Configure Gaze
-cp .env.example .env
-# Edit .env: set SIGNOZ_MCP_COMMAND, agent IDs
-
-# Run the verdict engine
-python -m gaze.engine
-
-# In another terminal, run the demo agent
-python demos/support_agent.py
-
-# Trigger a verdict
+# Trigger a verdict (stub — returns placeholder until SigNoz is wired)
 curl -X POST http://localhost:8000/verdict \
   -H "Content-Type: application/json" \
   -d '{"agent_id": "support-bot-01", "window": "1h"}'
-
-# Import the dashboard into SigNoz
-python -m gaze.dashboard --import
 ```
 
 Point your AI agent's OTLP exporter to SigNoz (`localhost:4317`) and Gaze watches every trace.
@@ -415,23 +352,9 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 
 | | |
 |---|---|
-| **SigNoz** | Self-hosted via Foundry — `casting.yaml` |
-| **Gaze Engine** | Python process alongside SigNoz |
-| **Dashboard** | Import `dashboards/gaze-verdict.json` into SigNoz |
-
-Foundry deployment:
-
-```bash
-# Install Foundry
-curl -fsSL https://raw.githubusercontent.com/SigNoz/foundry/main/install.sh | bash
-
-# Deploy SigNoz + Gaze
-foundry up --config casting.yaml
-
-# Verify
-foundry status
-curl http://localhost:8000/health
-```
+| **Frontend** | **[gaze-omega.vercel.app](https://gaze-omega.vercel.app)** — Vercel |
+| **Backend** | Python/FastAPI — runs alongside SigNoz |
+| **SigNoz** | Self-hosted via Foundry (roadmap — casting.yaml not yet created) |
 
 ---
 
@@ -439,25 +362,32 @@ curl http://localhost:8000/health
 
 ```
 gaze/
-├── gaze/
-│   ├── engine.py             # Verdict engine — poll, evaluate, emit
-│   ├── rules.py              # 9 deterministic rules (dataclasses)
-│   ├── verdict.py            # Scoring function + verdict hash
-│   ├── mcp_client.py         # SigNoz MCP wrapper
-│   ├── otel_exporter.py      # OTLP verdict write-back
-│   ├── api.py                # FastAPI server
-│   └── dashboard.py          # SigNoz dashboard import/export
+├── backend/
+│   ├── gaze/
+│   │   ├── __init__.py
+│   │   ├── server.py          # FastAPI server — /health, /verdict
+│   │   ├── rules.py           # 9 deterministic rule stubs
+│   │   ├── mcp_client.py      # SigNoz MCP wrapper (roadmap)
+│   │   └── otel_exporter.py   # OTLP verdict write-back (roadmap)
+│   └── requirements.txt
+├── frontend/
+│   ├── src/
+│   │   ├── pages/
+│   │   │   ├── Landing.tsx    # Hero + 5 Fig sections + GSAP/Lenis
+│   │   │   ├── Dashboard.tsx  # Agent cards + timeline, fetches API
+│   │   │   └── Docs.tsx       # Rules reference + architecture + API
+│   │   ├── components/
+│   │   │   ├── Layout.tsx     # Lenis + GSAP ScrollTrigger setup
+│   │   │   └── Nav.tsx        # Route-aware nav
+│   │   └── App.tsx            # React Router
+│   ├── tailwind.config.js
+│   └── vite.config.ts
 ├── dashboards/
-│   └── gaze-verdict.json     # Pre-built SigNoz dashboard
+│   └── gaze-verdict.json      # SigNoz dashboard (roadmap)
 ├── demos/
-│   └── support_agent.py      # Instrumented LangChain demo agent
-├── tests/
-│   ├── test_rules.py         # Rule unit tests (input → output pairs)
-│   ├── test_verdict.py       # Verdict scoring + hash tests
-│   └── test_mcp.py           # MCP integration tests
-├── casting.yaml              # Foundry deployment config
-├── casting.yaml.lock         # Locked deployment state
-├── requirements.txt
+│   └── support_agent.py       # Instrumented demo agent (roadmap)
+├── tests/                     # pytest suite (roadmap)
+├── vercel.json                # Vercel deployment config
 ├── .env.example
 └── README.md
 ```
@@ -466,13 +396,12 @@ gaze/
 
 ## Tech stack
 
-- **Verdict Engine:** Python 3.11+, FastAPI, Pydantic v2
-- **Observability:** SigNoz (self-hosted), OpenTelemetry Python SDK, OTLP gRPC
-- **Data Access:** SigNoz MCP Server (official)
-- **AI Agent:** LangChain + OpenAI (demo agent only — not in verdict path)
-- **Dashboard:** SigNoz Query Builder, pre-built JSON
-- **Deployment:** Foundry (casting.yaml)
-- **Testing:** pytest, deterministic I/O pairs for every rule
+- **Frontend:** Vite + React 19 + TypeScript + Tailwind v3 + GSAP ScrollTrigger + Lenis
+- **Backend:** Python 3.11+, FastAPI, Pydantic v2 (stub mode — SigNoz MCP not yet wired)
+- **Routing:** React Router v7, SPA fallback for Vercel
+- **Observability:** SigNoz (self-hosted, OpenTelemetry) — planned
+- **Deployment:** Vercel (frontend), Python process (backend)
+- **Testing:** pytest (roadmap)
 
 ---
 
