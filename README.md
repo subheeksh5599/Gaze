@@ -247,43 +247,70 @@ All thresholds are configurable. Rule set is versioned — every threshold chang
 
 | Capability | Status |
 |---|---|
-| **Frontend** — landing, dashboard, docs (3 routes, GSAP+Lenis, deployed) | **Live** at [gaze-omega.vercel.app](https://gaze-omega.vercel.app) |
-| **FastAPI server** — `/health`, `/verdict` endpoints with Pydantic models | **Real code** — runs on `uvicorn`, returns structured responses |
-| **Rules engine skeleton** — 9 rules as pure functions with configurable thresholds | **Real code** — `backend/gaze/rules.py`, all stubs, zero implementation |
+| **Frontend** — landing, dashboard (2 routes, GSAP+Lenis, deployed) | **Live** at [gaze-omega.vercel.app](https://gaze-omega.vercel.app) |
+| **FastAPI server** — 6 endpoints: /health, /verdict, /agents, /history, /recompute, /rules | **Real code** — `backend/gaze/server.py`, Pydantic models, FileClient persistence |
+| **Rules engine** — 9 rules with real detection logic (n-gram, embedding, cycle, regex) | **Real code** — `backend/gaze/rules.py`, 35/35 tests passing |
+| **Verdict engine** — weighted scoring 0-100, sha256 recomputable hash | **Real code** — `backend/gaze/verdict.py`, deterministic, no LLM in path |
 | **Landing page** — Fig-labeled sections, scroll reveals, architecture diagram | **Live** at `/` — kinetic orange brutalist, zero mock data |
-| **Dashboard** — fetches from API, loading/empty/error states, no hardcoded data | **Live** at `/dashboard` — real fetch, graceful degradation |
-| **Docs page** — rules reference, architecture, deployment commands, API endpoints | **Live** at `/docs` — static reference content |
-| **SigNoz MCP integration** — trace search, metrics query, dashboard import | **Roadmap** — `backend/gaze/mcp_client.py` not yet written |
-| **Rules implementation** — n-gram similarity, embedding drift, cycle detection, etc. | **Roadmap** — stubs only, no detection logic |
-| **Verdict hash** — sha256(trace_snapshot + rule_set + agent_id), recomputable | **Roadmap** — scoring function not implemented |
-| **OTLP verdict write-back** — verdict spans + metrics to SigNoz | **Roadmap** — `backend/gaze/otel_exporter.py` not yet written |
-| **SigNoz dashboard JSON** — pre-built dashboard for import | **Roadmap** — `dashboards/gaze-verdict.json` not yet created |
-| **Foundry deployment** — casting.yaml + casting.yaml.lock | **Roadmap** — no Foundry config exists |
-| **Demo agent** — instrumented LangChain agent for live demo | **Roadmap** — `demos/support_agent.py` not yet written |
-| **Tests** — pytest suite for rules, verdict, MCP | **Roadmap** — no tests written |
-| **Alert integration** — auto-create SigNoz alerts for score drops | **Roadmap** — not wired |
-| **Multi-agent support** — register multiple agents, per-agent baselines | **Roadmap** — API stub only |
+| **Dashboard** — fetches from API, loading/empty/error states | **Live** at `/dashboard` — real API fetch, graceful degradation |
+| **MCP client** — SigNoz MCP interface + FileClient fallback for dev/testing | **Real code** — `backend/gaze/mcp_client.py`, spans JSONL + agents.json persistence |
+| **OTLP exporter** — verdict spans + metrics to SigNoz, graceful file fallback | **Real code** — `backend/gaze/otel_exporter.py`, auto-degrades if OTel unavailable |
+| **Demo agent** — 3 scenarios (normal, hallucinating, injection), generates real SpanData | **Real code** — `demos/support_agent.py`, generates JSONL for Gaze test data |
+| **Tests** — pytest suite, 35/35 passing, every rule tested positive + negative | **Real** — `backend/tests/`, `python3 -m pytest tests/ -v` |
+| **Dashboard JSON** — 6-panel SigNoz dashboard (score cards, timeline, rules, evidence, cost overlay, status pie) | **Real** — `dashboards/gaze-verdict.json` |
+| **Foundry deployment** — casting.yaml + casting.yaml.lock | **Real** — `casting.yaml`, Docker Compose with SigNoz + Gaze |
+| **Multi-agent support** — register/watch multiple agents, per-agent baselines, manifests | **Real code** — /agents endpoint + AgentConfig persistence |
+| **Alert integration** — auto-create SigNoz alerts for score drops | **Roadmap** — MCP alert creation not yet wired to live SigNoz |
+| **SigNoz MCP live integration** — real trace data from running SigNoz instance | **Roadmap** — MCPClient structured, needs live SigNoz to populate |
 
 ---
 
 ## Tests
 
-Tests are on the roadmap. When implemented, the rule engine will be tested with deterministic input/output pairs — every rule will have at least one positive case (should trigger) and one negative case (should not trigger):
+35 tests, all passing. Every rule has positive (should trigger) and negative (should not trigger) cases:
 
 ```bash
-cd gaze && python -m pytest tests/ -v
+cd backend && python3 -m pytest tests/ -v
 ```
 
-Planned test structure:
-
-| Test | What it will prove |
-|---|---|
-| `test_repetition_loop_detects_identical_responses` | 5+ near-identical outputs trigger the rule |
-| `test_repetition_loop_ignores_unique_responses` | Normal varied output doesn't false-trigger |
-| `test_verdict_hash_deterministic` | Same input → same hash every time |
-| `test_verdict_hash_changes_with_different_input` | Different trace → different hash |
-| `test_score_healthy_no_rules_triggered` | Clean agent = score 100 |
-| `test_score_critical_all_rules_triggered` | All 9 rules fire = score near 0 |
+```
+tests/test_rules.py::TestRepetitionLoop::test_detects_identical_responses PASSED
+tests/test_rules.py::TestRepetitionLoop::test_ignores_unique_responses PASSED
+tests/test_rules.py::TestRepetitionLoop::test_short_sequence_no_trigger PASSED
+tests/test_rules.py::TestEmbeddingDrift::test_detects_divergence PASSED
+tests/test_rules.py::TestEmbeddingDrift::test_normal_within_threshold PASSED
+tests/test_rules.py::TestToolLoop::test_detects_cycle PASSED
+tests/test_rules.py::TestToolLoop::test_no_cycle_normal_sequence PASSED
+tests/test_rules.py::TestUnauthorizedTool::test_blocks_unknown_tool PASSED
+tests/test_rules.py::TestUnauthorizedTool::test_allows_known_tool PASSED
+tests/test_rules.py::TestUnauthorizedTool::test_empty_manifest_skips PASSED
+tests/test_rules.py::TestPromptInjection::test_detects_ignore_instructions PASSED
+tests/test_rules.py::TestPromptInjection::test_detects_dan PASSED
+tests/test_rules.py::TestPromptInjection::test_ignores_normal_input PASSED
+tests/test_rules.py::TestPromptInjection::test_detects_forget_training PASSED
+tests/test_rules.py::TestCostExplosion::test_detects_spike PASSED
+tests/test_rules.py::TestCostExplosion::test_normal_usage PASSED
+tests/test_rules.py::TestLatencyDegradation::test_detects_slowdown PASSED
+tests/test_rules.py::TestLatencyDegradation::test_normal_latency PASSED
+tests/test_rules.py::TestEmptyResponse::test_detects_empty PASSED
+tests/test_rules.py::TestEmptyResponse::test_detects_whitespace_only PASSED
+tests/test_rules.py::TestEmptyResponse::test_normal_response PASSED
+tests/test_rules.py::TestHallucinatedSource::test_detects_fake_citation PASSED
+tests/test_rules.py::TestHallucinatedSource::test_valid_citations PASSED
+tests/test_rules.py::TestHallucinatedSource::test_no_citations_no_trigger PASSED
+tests/test_rules.py::TestEvaluateAll::test_healthy_agent_no_triggers PASSED
+tests/test_rules.py::TestEvaluateAll::test_critical_agent_many_triggers PASSED
+tests/test_verdict.py::TestVerdictScoring::test_healthy_no_rules_triggered PASSED
+tests/test_verdict.py::TestVerdictScoring::test_score_drops_with_triggers PASSED
+tests/test_verdict.py::TestVerdictScoring::test_clamped_to_zero PASSED
+tests/test_verdict.py::TestVerdictScoring::test_status_buckets PASSED
+tests/test_verdict.py::TestVerdictHash::test_deterministic_same_input PASSED
+tests/test_verdict.py::TestVerdictHash::test_different_input_different_hash PASSED
+tests/test_verdict.py::TestVerdictHash::test_different_agent_different_hash PASSED
+tests/test_verdict.py::TestVerdictHash::test_verify_recomputation PASSED
+tests/test_verdict.py::TestVerdictHash::test_verify_rejects_wrong_hash PASSED
+============================== 35 passed in 0.34s ==============================
+```
 
 ---
 
@@ -295,22 +322,27 @@ Planned test structure:
 git clone https://github.com/subheeksh5599/gaze.git
 cd gaze
 
-# Install frontend
-cd frontend && npm install && cd ..
-
-# Run the backend (requires SigNoz self-hosted for real verdicts)
+# Install and run the backend
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-python gaze/server.py
+python gaze/server.py &
 
-# In another terminal, run the frontend
-cd frontend && npm run dev
+# Run the frontend
+cd ../frontend && npm install && npm run dev
 
-# Trigger a verdict (stub — returns placeholder until SigNoz is wired)
+# Generate demo data (run the 3 scenarios)
+cd ../demos && python3 support_agent.py
+
+# Request a verdict — uses the spans generated by the demo
 curl -X POST http://localhost:8000/verdict \
   -H "Content-Type: application/json" \
   -d '{"agent_id": "support-bot-01", "window": "1h"}'
+
+# Verify a verdict hash
+curl -X POST http://localhost:8000/recompute \
+  -H "Content-Type: application/json" \
+  -d '{"agent_id": "support-bot-01", "verdict_hash": "<hash>", "rule_set_version": "1.0.0", "spans": [...]}'
 ```
 
 Point your AI agent's OTLP exporter to SigNoz (`localhost:4317`) and Gaze watches every trace.
