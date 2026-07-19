@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/media/hero.png" alt="Gaze — AI Agent Verdict Engine on SigNoz" width="100%" />
+<img src="docs/media/landing.png" alt="Gaze — AI Agent Verdict Engine on SigNoz" width="100%" />
 
 &nbsp;
 
@@ -146,7 +146,7 @@ SigNoz already captures every trace, span, and metric from your AI agents throug
 
 Five capabilities, all powered by SigNoz traces through the MCP server. The verdict engine runs locally, reads from your self-hosted SigNoz instance, and writes verdicts back as spans and metrics.
 
-<img src="docs/media/dashboard.png" alt="Gaze Verdict Dashboard — agent score cards, rule trigger breakdown, verdict timeline, evidence explorer" width="100%" />
+<img src="docs/media/dashboard.png" alt="Gaze Dashboard — agent score cards, verdict timeline, rule tags" width="100%" />
 
 ### 1 · Trace watcher
 
