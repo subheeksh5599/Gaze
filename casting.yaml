@@ -1,35 +1,8 @@
-# Gaze — AI Agent Verdict Engine
-# Foundry deployment config for SigNoz + Gaze
-
-version: "1.0"
-name: gaze
-
-services:
-  signoz:
-    image: signoz/signoz:latest
-    ports:
-      - "4317:4317"   # OTLP gRPC
-      - "4318:4318"   # OTLP HTTP
-      - "3301:3301"   # SigNoz UI
-    volumes:
-      - signoz-data:/data
-    environment:
-      - SIGNOZ_TELEMETRY_ENABLED=false
-
-  gaze-engine:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./data:/app/data
-    environment:
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://signoz:4317
-      - SIGNOZ_MCP_COMMAND=npx -y @signoz/mcp-server
-      - GAZE_DATA_DIR=/app/data
-    depends_on:
-      - signoz
-
-volumes:
-  signoz-data:
+apiVersion: v1alpha1
+kind: Installation
+metadata:
+  name: signoz-gaze
+spec:
+  deployment:
+    flavor: compose
+    mode: docker
