@@ -1,0 +1,8 @@
+version: "1.0"
+name: gaze
+locked_at: "2026-07-18T00:00:00Z"
+services:
+  signoz:
+    image: "signoz/signoz:0.45.0"
+  gaze-engine:
+    image: "gaze-engine:0.2.0"

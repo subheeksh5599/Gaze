@@ -1,10 +1,41 @@
-"""Gaze Verdict Engine — FastAPI server."""
+"""
+Gaze Verdict Engine — FastAPI server.
 
-from fastapi import FastAPI
+Endpoints:
+  GET  /health          — liveness check
+  POST /verdict         — request verdict for an agent
+  GET  /agents          — list registered agents + current status
+  POST /agents          — register a new agent
+  GET  /history         — query verdict history
+  POST /recompute       — verify a verdict hash
+  GET  /rules           — list all rules with thresholds
+
+Architecture:
+  FileClient (data/) → Rules Engine → Verdict Scorer → OTLP Exporter
+  MCPClient (when SigNoz is available) replaces FileClient for real traces.
+"""
+
+import os
+import time
+import hashlib
+from pathlib import Path
+from typing import Optional
+
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="Gaze", version="0.1.0")
+from .rules import RulesConfig, SpanData, BaselineData
+from .verdict import compute_verdict, verify_verdict, Verdict
+from .mcp_client import FileClient, AgentConfig
+from .otel_exporter import OTLPExporter
+
+# --------------- config ---------------
+
+DATA_DIR = Path(os.getenv("GAZE_DATA_DIR", "data"))
+POLL_INTERVAL = int(os.getenv("GAZE_POLL_INTERVAL", "30"))
+
+app = FastAPI(title="Gaze", version="0.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -13,53 +44,262 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Clients
+file_client = FileClient(str(DATA_DIR))
+otel = OTLPExporter(data_dir=str(DATA_DIR))
+
+
+# --------------- models ---------------
 
 class VerdictRequest(BaseModel):
     agent_id: str
     window: str = "1h"
 
 
-class RuleTrigger(BaseModel):
-    rule: str
-    severity: str
-    evidence_span: str
-    detail: str
-
-
-class VerdictResponse(BaseModel):
-    verdict_id: str
+class RegisterAgentRequest(BaseModel):
     agent_id: str
-    timestamp: str
-    score: int
-    status: str
-    verdict_hash: str
-    rules_evaluated: int
-    rules_triggered: list[RuleTrigger]
-    evidence: list[dict]
+    service_name: str = ""
+    manifest: list[str] = []
 
+
+class RecomputeRequest(BaseModel):
+    agent_id: str
+    verdict_hash: str
+    rule_set_version: str
+    spans: list[dict]  # trace snapshot to verify against
+
+
+class AgentStatus(BaseModel):
+    agent_id: str
+    score: int = 0
+    status: str = "UNKNOWN"
+    last_verdict: str = "never"
+    rules_triggered: int = 0
+
+
+# --------------- routes ---------------
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "engine": "gaze"}
+    return {"status": "ok", "engine": "gaze", "version": "0.2.0"}
 
 
-@app.post("/verdict", response_model=VerdictResponse)
+@app.post("/verdict")
 async def get_verdict(req: VerdictRequest):
-    # TODO: Wire to SigNoz MCP for real trace data
+    """Request a verdict for an agent. Runs rules against stored spans."""
+    # Load spans for this agent
+    spans = file_client.load_spans(req.agent_id)
+    if not spans:
+        return {
+            "verdict_id": "v_empty",
+            "agent_id": req.agent_id,
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "score": 100,
+            "status": "HEALTHY",
+            "verdict_hash": "sha256:n/a",
+            "rules_evaluated": 9,
+            "rules_triggered": [],
+            "evidence": [],
+            "detail": "No trace data available — instrument your agent with OpenTelemetry and send spans to SigNoz",
+        }
+
+    # Load or compute baseline
+    baseline = file_client.load_baseline(req.agent_id)
+    if baseline is None:
+        baseline = BaselineData.from_spans(spans)
+
+    # Load agent config for manifest
+    agents = file_client.load_agents()
+    config = next((a for a in agents if a.agent_id == req.agent_id), None)
+    manifest = config.manifest if config else []
+
+    # Compute verdict
+    rules_config = RulesConfig()
+    verdict = compute_verdict(spans, req.agent_id, rules_config, baseline, manifest)
+
+    # Save verdict to history
+    file_client.save_verdict(req.agent_id, _verdict_to_dict(verdict))
+
+    # Export to SigNoz
+    otel.export_verdict(verdict)
+
+    return _verdict_to_dict(verdict)
+
+
+@app.get("/agents")
+async def list_agents():
+    """List all registered agents with current status."""
+    agents = file_client.load_agents()
+
+    result = []
+    for a in agents:
+        verdicts = file_client.load_verdicts(a.agent_id, limit=1)
+        if verdicts:
+            latest = verdicts[-1]
+            result.append({
+                "id": a.agent_id,
+                "service_name": a.service_name,
+                "score": latest["score"],
+                "status": latest["status"],
+                "lastVerdict": _time_ago(latest["timestamp"]),
+                "rulesTriggered": latest.get("rules_triggered_count", 0),
+            })
+        else:
+            result.append({
+                "id": a.agent_id,
+                "service_name": a.service_name,
+                "score": 0,
+                "status": "UNKNOWN",
+                "lastVerdict": "never",
+                "rulesTriggered": 0,
+            })
+
+    return {"agents": result}
+
+
+@app.post("/agents")
+async def register_agent(req: RegisterAgentRequest):
+    """Register a new agent for Gaze to watch."""
+    agents = file_client.load_agents()
+    existing = [a for a in agents if a.agent_id != req.agent_id]
+    existing.append(AgentConfig(
+        agent_id=req.agent_id,
+        service_name=req.service_name,
+        manifest=req.manifest,
+    ))
+    file_client.save_agents(existing)
+    return {"registered": req.agent_id, "total_agents": len(existing)}
+
+
+@app.get("/history")
+async def get_history(agent_id: str = "", limit: int = 20):
+    """Query verdict history, optionally filtered by agent."""
+    if agent_id:
+        verdicts = file_client.load_verdicts(agent_id, limit)
+    else:
+        # Aggregate across all agents
+        agents = file_client.load_agents()
+        all_verdicts = []
+        for a in agents:
+            all_verdicts.extend(file_client.load_verdicts(a.agent_id, limit=5))
+        all_verdicts.sort(key=lambda v: v.get("timestamp", ""), reverse=True)
+        verdicts = all_verdicts[:limit]
+
+    entries = []
+    for v in verdicts:
+        rules = [e["rule"] for e in v.get("evidence", [])]
+        entries.append({
+            "time": _format_time(v.get("timestamp", "")),
+            "agent": v.get("agent_id", ""),
+            "score": v.get("score", 0),
+            "rules": rules,
+        })
+
+    return {"entries": entries}
+
+
+@app.post("/recompute")
+async def recompute_verdict(req: RecomputeRequest):
+    """Recompute a verdict hash from stored trace snapshot for verification."""
+    spans = [SpanData(**s) for s in req.spans]
+    valid = verify_verdict(spans, req.agent_id, req.verdict_hash, req.rule_set_version)
     return {
-        "verdict_id": f"v_{hash(req.agent_id) % 0xFFFFFFFF:08x}",
         "agent_id": req.agent_id,
-        "timestamp": "2026-07-22T14:30:00Z",
-        "score": 94,
-        "status": "HEALTHY",
-        "verdict_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "rules_evaluated": 9,
-        "rules_triggered": [],
-        "evidence": [],
+        "verdict_hash": req.verdict_hash,
+        "recomputed_match": valid,
+        "spans_checked": len(spans),
     }
 
 
+@app.get("/rules")
+async def list_rules():
+    """List all rules with thresholds and weights."""
+    cfg = RulesConfig()
+    from .rules import RULE_WEIGHTS, INJECTION_PATTERNS
+
+    return {
+        "rules": [
+            {"name": "repetition_loop", "severity": "critical", "weight": RULE_WEIGHTS["repetition_loop"], "threshold": f"n-gram similarity > {cfg.repetition_similarity} across {cfg.repetition_min_spans}+ spans"},
+            {"name": "embedding_drift", "severity": "high", "weight": RULE_WEIGHTS["embedding_drift"], "threshold": f"cosine distance > {cfg.embedding_drift_threshold}"},
+            {"name": "tool_loop", "severity": "critical", "weight": RULE_WEIGHTS["tool_loop"], "threshold": f"same (tool, args) pair repeated {cfg.tool_loop_min_cycles}+ times"},
+            {"name": "unauthorized_tool", "severity": "critical", "weight": RULE_WEIGHTS["unauthorized_tool"], "threshold": "tool not in agent manifest allowlist"},
+            {"name": "prompt_injection", "severity": "critical", "weight": RULE_WEIGHTS["prompt_injection"], "threshold": f"regex match against {len(INJECTION_PATTERNS)} known vectors"},
+            {"name": "cost_explosion", "severity": "high", "weight": RULE_WEIGHTS["cost_explosion"], "threshold": f"tokens > {cfg.cost_spike_multiplier}× 7-day avg"},
+            {"name": "latency_degradation", "severity": "warning", "weight": RULE_WEIGHTS["latency_degradation"], "threshold": f"P95 > {cfg.latency_spike_multiplier}× baseline"},
+            {"name": "empty_response", "severity": "warning", "weight": RULE_WEIGHTS["empty_response"], "threshold": "response content length = 0"},
+            {"name": "hallucinated_source", "severity": "high", "weight": RULE_WEIGHTS["hallucinated_source"], "threshold": "cited doc not in retrieval spans"},
+        ],
+        "rule_set_version": cfg.rule_set_version,
+        "scoring": "score = 100 - sum(triggered_rule_weights), clamped to [0, 100]",
+        "status_buckets": {
+            "HEALTHY": "85-100",
+            "WARNING": "60-84",
+            "DEGRADED": "30-59",
+            "CRITICAL": "0-29",
+        },
+    }
+
+
+# --------------- helpers ---------------
+
+def _verdict_to_dict(v: Verdict) -> dict:
+    return {
+        "verdict_id": v.verdict_id,
+        "agent_id": v.agent_id,
+        "timestamp": v.timestamp,
+        "score": v.score,
+        "status": v.status.value,
+        "verdict_hash": v.verdict_hash,
+        "rules_evaluated": v.rules_evaluated,
+        "rules_triggered": [
+            {
+                "rule": r.rule,
+                "severity": r.severity.value,
+                "weight": r.weight,
+                "evidence_span": r.evidence_span_id,
+                "detail": r.detail,
+            }
+            for r in v.rules_triggered
+        ],
+        "evidence": v.evidence,
+        "rule_set_version": v.rule_set_version,
+    }
+
+
+def _time_ago(ts: str) -> str:
+    """Convert ISO timestamp to relative time string."""
+    if not ts or ts == "never":
+        return "never"
+    try:
+        from datetime import datetime, timezone
+        dt = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        diff = (now - dt).total_seconds()
+        if diff < 60:
+            return "just now"
+        if diff < 3600:
+            return f"{int(diff // 60)}m ago"
+        if diff < 86400:
+            return f"{int(diff // 3600)}h ago"
+        return f"{int(diff // 86400)}d ago"
+    except (ValueError, TypeError):
+        return ts
+
+
+def _format_time(ts: str) -> str:
+    """Format ISO timestamp to HH:MM."""
+    if not ts:
+        return "--:--"
+    try:
+        from datetime import datetime
+        dt = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ")
+        return dt.strftime("%H:%M")
+    except (ValueError, TypeError):
+        return ts
+
+
+# --------------- main ---------------
+
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run(app, host="0.0.0.0", port=8000)

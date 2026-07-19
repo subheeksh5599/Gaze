@@ -5,7 +5,6 @@ import gsap from 'gsap';
 const links = [
   { to: '/', label: 'Gaze' },
   { to: '/dashboard', label: 'Dashboard' },
-  { to: '/docs', label: 'Docs' },
 ];
 
 export default function Nav() {

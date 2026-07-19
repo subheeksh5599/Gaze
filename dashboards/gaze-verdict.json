@@ -1,0 +1,112 @@
+{
+  "dashboard": {
+    "title": "Gaze — AI Agent Verdict Engine",
+    "description": "Real-time verdict scores, rule breakdown, and evidence explorer for AI agents observed through SigNoz.",
+    "tags": ["gaze", "ai-agent", "verdict", "observability"],
+    "panels": [
+      {
+        "id": "score-cards",
+        "title": "Agent Score Cards",
+        "type": "value",
+        "description": "Current verdict score per agent",
+        "query": {
+          "metrics": [
+            {
+              "name": "gaze_verdict_score",
+              "aggregation": "latest",
+              "groupBy": ["agent_id"]
+            }
+          ]
+        }
+      },
+      {
+        "id": "score-timeline",
+        "title": "Score Timeline",
+        "type": "time_series",
+        "description": "Verdict score over time per agent",
+        "query": {
+          "metrics": [
+            {
+              "name": "gaze_verdict_score",
+              "aggregation": "avg",
+              "groupBy": ["agent_id", "status"]
+            }
+          ],
+          "timeRange": "1h"
+        }
+      },
+      {
+        "id": "rule-breakdown",
+        "title": "Rule Trigger Breakdown",
+        "type": "bar",
+        "description": "Which rules fire most often",
+        "query": {
+          "metrics": [
+            {
+              "name": "gaze_verdict_rules_triggered",
+              "aggregation": "sum",
+              "groupBy": ["rule"]
+            }
+          ],
+          "timeRange": "24h"
+        }
+      },
+      {
+        "id": "evidence-explorer",
+        "title": "Evidence Explorer",
+        "type": "table",
+        "description": "Span-level evidence for triggered rules",
+        "query": {
+          "search": "service.name = gaze-engine AND name = gaze.verdict",
+          "columns": ["gaze.verdict.agent_id", "gaze.verdict.score", "gaze.verdict.status", "timestamp"],
+          "timeRange": "1h"
+        }
+      },
+      {
+        "id": "token-cost-overlay",
+        "title": "Cost vs Score Overlay",
+        "type": "time_series",
+        "description": "Agent cost overlaid with verdict score — good score != cheap score",
+        "query": {
+          "metrics": [
+            {
+              "name": "gaze_verdict_score",
+              "aggregation": "avg",
+              "groupBy": ["agent_id"]
+            },
+            {
+              "name": "gen_ai_usage_input_tokens",
+              "aggregation": "sum",
+              "groupBy": ["agent_id"]
+            }
+          ],
+          "timeRange": "1h"
+        }
+      },
+      {
+        "id": "verdict-status-distribution",
+        "title": "Verdict Status Distribution",
+        "type": "pie",
+        "description": "HEALTHY vs WARNING vs DEGRADED vs CRITICAL",
+        "query": {
+          "metrics": [
+            {
+              "name": "gaze_verdict_score",
+              "aggregation": "count",
+              "groupBy": ["status"]
+            }
+          ],
+          "timeRange": "24h"
+        }
+      }
+    ],
+    "variables": [
+      {
+        "name": "agent_id",
+        "label": "Agent",
+        "type": "query",
+        "query": "SELECT DISTINCT agent_id FROM gaze_verdict_score"
+      }
+    ]
+  }
+}

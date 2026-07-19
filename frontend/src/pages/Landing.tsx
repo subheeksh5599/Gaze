@@ -100,10 +100,12 @@ export default function Landing() {
               View Dashboard →
             </a>
             <a
-              href="/docs"
+              href="https://github.com/subheeksh5599/Gaze"
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-block px-8 py-4 border border-ash text-ash font-mono text-xs uppercase tracking-[0.2em] hover:border-bone hover:text-bone transition-colors duration-200"
             >
-              Read Docs
+              GitHub ↗
             </a>
           </div>
         </div>
@@ -402,12 +404,6 @@ export default function Landing() {
               className="font-mono text-[10px] uppercase tracking-[0.25em] text-ash hover:text-bone transition-colors"
             >
               X/Twitter
-            </a>
-            <a
-              href="/docs"
-              className="font-mono text-[10px] uppercase tracking-[0.25em] text-ash hover:text-bone transition-colors"
-            >
-              Docs
             </a>
           </div>
         </div>
