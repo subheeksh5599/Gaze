@@ -14,7 +14,7 @@
 
 ### AI agents don't self-report failure. Gaze watches their traces and tells you when they break.
 
-Gaze is a deterministic verdict engine that watches your AI agents through SigNoz traces, evaluates their behavior against a rule set, and issues a recomputable verdict — hallucination, tool abuse, prompt injection, cost explosion, quality degradation. Every verdict is traceable to the exact span that triggered it. No LLM in the verdict path. Same input always produces the same verdict hash.
+Gaze is a deterministic verdict engine that watches your AI agents through SigNoz traces, evaluates their behavior against 9 rules, and issues a recomputable verdict. Two integration paths — wrap any Python agent in one line with `@gaze.watch`, or send OpenTelemetry traces to SigNoz and Gaze reads them from ClickHouse. Hallucination, tool abuse, prompt injection, cost explosion — every verdict links to the exact span that triggered it. No LLM in the verdict path. Same input always produces the same verdict hash.
 
 ### ▶ Deploy with Foundry. Observe with SigNoz. Trust the verdict.
 
@@ -55,7 +55,7 @@ Built for the Agents of SigNoz Hackathon 2026. MIT licensed.
 
 ## ▶ See it in one command
 
-**Quick start — wrap YOUR agent in one line:**
+**Path 1 — SDK: wrap your agent in one line:**
 
 ```python
 from gaze_sdk import Gaze
@@ -64,25 +64,47 @@ gaze = Gaze(agent_id="my-agent", api_url="https://gaze-4fy2.onrender.com")
 
 @gaze.watch
 def my_ai_agent(query: str) -> str:
-    # your LangChain / CrewAI / raw LLM call here
     return llm.generate(query)
 
-# Run your agent normally
 response = my_ai_agent("Where is my order?")
-# → agent runs, spans auto-recorded, verdict auto-generated
-
-# Check the verdict
 verdict = gaze.verdict()
 print(f"Score: {verdict['score']}/100, Status: {verdict['status']}")
 # → Score: 94/100, Status: HEALTHY
-
-# Check alerts
-alerts = gaze.alerts()
-# → [] (no alerts — agent is healthy)
 ```
 
-That's it. One decorator. No infrastructure changes. Gaze watches every call,
-runs 9 deterministic rules, and tells you when your agent breaks.
+**Path 2 — SigNoz: traces flow through OpenTelemetry → ClickHouse → Gaze:**
+
+```bash
+# Send OTel traces from any agent to SigNoz
+# Gaze reads them from ClickHouse and runs 9 rules
+curl -X POST http://localhost:8000/verdict \
+  -H "Content-Type: application/json" \
+  -d '{"agent_id":"demo-agent","source":"signoz"}'
+```
+
+Real output from SigNoz pipeline — 12 traces, 2 rules triggered:
+
+```json
+{
+    "verdict_id": "v_a3f71b2c",
+    "agent_id": "demo-agent",
+    "score": 60,
+    "status": "WARNING",
+    "verdict_hash": "sha256:218c232d3d62e792636ee92e25147ad5d990717d0ed...",
+    "rules_triggered": [
+        {
+            "rule": "prompt_injection",
+            "severity": "critical",
+            "detail": "Prompt injection pattern detected: 'ignore all previous instructions'"
+        },
+        {
+            "rule": "cost_explosion",
+            "severity": "high",
+            "detail": "Token usage 9.8× baseline"
+        }
+    ]
+}
+```
 
 **Full demo — run the built-in demo for the complete story:**
 
@@ -92,78 +114,9 @@ cd backend && python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python3 gaze/server.py &
 
-# Terminal 2: run the demo (shows HEALTHY → CRITICAL drop)
-cd .. && python3 demos/demo_verdict_drop.py
+# Terminal 2: run the SDK demo (shows HEALTHY → WARNING drop with real agent code)
+cd .. && python3 demos/sdk_demo.py
 ```
-
-Real output from the demo:
-
-```bash
-# Start the backend
-cd backend && python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python3 gaze/server.py &
-
-# Generate demo data (3 scenarios: normal, hallucinating, injection)
-cd .. && python3 demos/support_agent.py
-
-# Register the agent
-curl -s -X POST http://localhost:8000/agents \
-  -H "Content-Type: application/json" \
-  -d '{"agent_id":"support-bot-01","service_name":"demo-support-agent","manifest":["search_kb","fetch_ticket","escalate_to_human","check_status"]}'
-# → {"registered":"support-bot-01","total_agents":1}
-
-# Request a verdict — runs all 9 rules against the generated spans
-curl -s -X POST http://localhost:8000/verdict \
-  -H "Content-Type: application/json" \
-  -d '{"agent_id":"support-bot-01","window":"1h"}'
-```
-
-Real output — 4 rules triggered, score 25, CRITICAL:
-
-```json
-{
-    "verdict_id": "v_ab66f54d",
-    "agent_id": "support-bot-01",
-    "timestamp": "2026-07-19T04:10:50Z",
-    "score": 25,
-    "status": "CRITICAL",
-    "verdict_hash": "sha256:e66a7633d216459c9794c67a09503a2a42dd0110664b20bf766f8ba764622b27",
-    "rules_evaluated": 9,
-    "rules_triggered": [
-        {
-            "rule": "repetition_loop",
-            "severity": "critical",
-            "weight": 20,
-            "evidence_span": "85d592b83b0a12ca",
-            "detail": "Agent repeated similar output 8 times consecutively"
-        },
-        {
-            "rule": "prompt_injection",
-            "severity": "critical",
-            "weight": 25,
-            "evidence_span": "10a2e434007b9671",
-            "detail": "Prompt injection pattern detected: 'ignore all previous instructions'"
-        },
-        {
-            "rule": "cost_explosion",
-            "severity": "high",
-            "weight": 15,
-            "detail": "Token usage 18.0× baseline (2004 vs avg 111)"
-        },
-        {
-            "rule": "hallucinated_source",
-            "severity": "high",
-            "weight": 15,
-            "evidence_span": "2752cfc9fa629230",
-            "detail": "Agent cited document 'doc-nonexistent-policy' not found in retrieval spans"
-        }
-    ],
-    "rule_set_version": "1.0.0"
-}
-```
-
-Every verdict carries a sha256 hash — `sha256(trace_snapshot + rule_set_version + agent_id)`. Same input always produces the same hash. No LLM in the verdict path. Provable, not claimable.
 
 ---
 
@@ -341,10 +294,10 @@ All thresholds are configurable. Rule set is versioned — every threshold chang
 | **Demo agent** — 3 scenarios (normal, hallucinating, injection), generates real SpanData | **Real code** — `demos/support_agent.py`, generates JSONL for Gaze test data |
 | **Tests** — pytest suite, 35/35 passing, every rule tested positive + negative | **Real** — `backend/tests/`, `python3 -m pytest tests/ -v` |
 | **Dashboard JSON** — 6-panel SigNoz dashboard (score cards, timeline, rules, evidence, cost overlay, status pie) | **Real** — `dashboards/gaze-verdict.json` |
-| **Foundry deployment** — casting.yaml + casting.yaml.lock | **Real** — `casting.yaml`, Docker Compose with SigNoz + Gaze |
 | **Multi-agent support** — register/watch multiple agents, per-agent baselines, manifests | **Real code** — /agents endpoint + AgentConfig persistence |
+| **SigNoz pipeline** — OTLP traces → ClickHouse → Gaze → verdict | **Live** — 12 real traces ingested, SigNoz admin registered, ClickHouse queried via docker exec |
 | **Alert integration** — auto-create alerts when verdict score drops below threshold, stored + queryable via API, optional Slack/Discord webhook | **Real** — `backend/gaze/alerts.py`, `/alerts` + `/alerts/{id}/acknowledge` endpoints |
-| **SigNoz MCP live integration** — real trace data from running SigNoz instance | **Real** — SigNoz self-hosted via Foundry, UI at localhost:8080, OTLP at localhost:4317 |
+| **Foundry deployment** — casting.yaml + casting.yaml.lock | **Real** — `casting.yaml` (v1alpha1), `foundryctl cast` deploys SigNoz |
 
 ---
 
@@ -543,13 +496,11 @@ gaze/
 
 ## How it uses SigNoz
 
-**Reads.** Gaze uses SigNoz MCP server exclusively for data access. `signoz_traces_search` fetches agent spans. `signoz_metrics_query_range` reads historical baselines for cost and latency rules. `signoz_logs_search` correlates error logs with trace context. No direct database access — everything through the MCP layer.
+**Path 1 — SDK.** Gaze wraps your agent with `@gaze.watch`, records spans, sends them to the Gaze API (`/ingest`), and returns verdicts instantly. No SigNoz needed for this path — works standalone via Render or local.
 
-**Writes.** Gaze emits verdicts as OpenTelemetry spans back to SigNoz via OTLP. Each verdict span carries `gaze.verdict.score`, `gaze.verdict.status`, `gaze.verdict.hash`, and links to the evidence spans that triggered rules. Verdict metrics (`gaze.verdict.score` gauge) are written as OTel metrics for dashboard visualization and alerting.
+**Path 2 — SigNoz pipeline.** Your agent sends OpenTelemetry traces to SigNoz via OTLP (gRPC :4317 or HTTP :4318). SigNoz stores them in ClickHouse (`signoz_traces.distributed_signoz_index_v3`). Gaze queries ClickHouse directly via `docker exec`, extracts GenAI attributes (prompt, completion, tokens, model), runs 9 deterministic rules, and issues a verdict. Verdict spans are written back to SigNoz via OTLP.
 
-**Dashboards.** The pre-built `gaze-verdict.json` dashboard is imported into SigNoz via `signoz_import_dashboard` MCP tool. It uses SigNoz Query Builder for all panels — no external visualization tools.
-
-**Alerts.** Gaze creates SigNoz alerts via `signoz_alerts_create` for score drops below configured thresholds. Alerts fire through SigNoz's notification channels (Slack, email, webhook).
+**Both paths use the same rules engine, same verdict hashing, same API.**
 
 ---
 
