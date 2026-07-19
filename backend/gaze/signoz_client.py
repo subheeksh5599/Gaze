@@ -35,21 +35,25 @@ class SigNozClient:
     def fetch_spans(self, service_name: str = "demo-agent",
                     limit: int = 100, minutes: int = 60) -> list[SpanData]:
         """Fetch recent spans from SigNoz for a given service."""
+        svc = service_name.replace("'", "''")
+        # Use ClickHouse dollar-quoting $$ for attribute keys,
+        # and double-single-quote the string value to survive shell escaping
         query = f"""
         SELECT
-            spanId, traceId, parentSpanId,
+            span_id,
+            trace_id,
+            parent_span_id,
             name as operation,
-            toString(arrayElement(attributeMap['gen_ai.request.model'], 1)) as model,
-            toInt64OrZero(arrayElement(attributeMap['gen_ai.usage.input_tokens'], 1)) as input_tokens,
-            toInt64OrZero(arrayElement(attributeMap['gen_ai.usage.output_tokens'], 1)) as output_tokens,
-            toString(arrayElement(attributeMap['gen_ai.prompt'], 1)) as input_text,
-            toString(arrayElement(attributeMap['gen_ai.completion'], 1)) as output_text,
-            toString(arrayElement(attributeMap['tool.name'], 1)) as tool_name,
-            durationNano / 1e6 as duration_ms,
-            toUnixTimestamp64Nano(timestamp) * 1e9 as start_time_ns,
-            statusCode
-        FROM signoz_traces.signoz_spans
-        WHERE serviceName = '{service_name}'
+            toString(attributes_string[$$gen_ai.request.model$$]) as model,
+            toInt64OrZero(toString(attributes_number[$$gen_ai.usage.input_tokens$$])) as input_tokens,
+            toInt64OrZero(toString(attributes_number[$$gen_ai.usage.output_tokens$$])) as output_tokens,
+            toString(attributes_string[$$gen_ai.prompt$$]) as input_text,
+            toString(attributes_string[$$gen_ai.completion$$]) as output_text,
+            duration_nano / 1e6 as duration_ms,
+            toUnixTimestamp64Nano(timestamp) as start_time_ns,
+            status_code
+        FROM signoz_traces.distributed_signoz_index_v3
+        WHERE resources_string[$$service.name$$] = '{svc}'
           AND timestamp > now() - INTERVAL {minutes} MINUTE
         ORDER BY timestamp DESC
         LIMIT {limit}
@@ -59,26 +63,14 @@ class SigNozClient:
         return self._parse_spans(raw)
 
     def _query(self, sql: str) -> str:
-        """Execute ClickHouse query. Returns TSV output."""
-        if self.mode == "http":
-            try:
-                data = sql.encode()
-                req = urllib.request.Request(
-                    self._http_url, data=data, method="POST"
-                )
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    return resp.read().decode()
-            except Exception as e:
-                print(f"ClickHouse HTTP query failed: {e}")
-                return ""
-
-        # Docker mode: docker exec into clickhouse container
+        """Execute ClickHouse query via docker exec. Returns TSV output."""
         container = "signoz-gaze-telemetrystore-clickhouse-0-0"
         try:
+            # Pipe SQL via stdin to avoid shell escaping issues
             result = subprocess.run(
                 ["sg", "docker", "-c",
-                 f"docker exec {container} clickhouse-client -q '{sql}' --format TSVWithNames"],
-                capture_output=True, text=True, timeout=15,
+                 f"docker exec -i {container} clickhouse-client --format TSVWithNames"],
+                input=sql, capture_output=True, text=True, timeout=15,
             )
             if result.returncode != 0:
                 print(f"ClickHouse query failed: {result.stderr}")
@@ -106,19 +98,18 @@ class SigNozClient:
 
             try:
                 span = SpanData(
-                    span_id=row.get("spanId", ""),
-                    trace_id=row.get("traceId", ""),
-                    parent_span_id=row.get("parentSpanId", ""),
+                    span_id=row.get("span_id", ""),
+                    trace_id=row.get("trace_id", ""),
+                    parent_span_id=row.get("parent_span_id", ""),
                     operation=row.get("operation", "generate"),
                     model=row.get("model", ""),
                     input_tokens=int(float(row.get("input_tokens", "0") or "0")),
                     output_tokens=int(float(row.get("output_tokens", "0") or "0")),
                     input_text=row.get("input_text", ""),
                     output_text=row.get("output_text", ""),
-                    tool_name=row.get("tool_name", ""),
                     duration_ms=float(row.get("duration_ms", "0") or "0"),
                     start_time_ns=int(float(row.get("start_time_ns", "0") or "0")),
-                    status_code=int(float(row.get("statusCode", "1") or "1")),
+                    status_code=int(float(row.get("status_code", "1") or "1")),
                 )
                 spans.append(span)
             except (ValueError, TypeError):
