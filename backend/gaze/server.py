@@ -37,6 +37,7 @@ from rules import RulesConfig, SpanData, BaselineData
 from verdict import compute_verdict, verify_verdict, Verdict
 from mcp_client import FileClient, AgentConfig
 from otel_exporter import OTLPExporter
+from alerts import AlertManager
 
 # --------------- config ---------------
 
@@ -55,6 +56,7 @@ app.add_middleware(
 # Clients
 file_client = FileClient(str(DATA_DIR))
 otel = OTLPExporter(data_dir=str(DATA_DIR))
+alerts = AlertManager(str(DATA_DIR))
 
 
 # --------------- models ---------------
@@ -131,7 +133,22 @@ async def get_verdict(req: VerdictRequest):
     # Export to SigNoz
     otel.export_verdict(verdict)
 
-    return _verdict_to_dict(verdict)
+    # Trigger alert if score crosses threshold
+    rules_triggered_names = [r.rule for r in verdict.rules_triggered]
+    alert = alerts.create_alert(
+        req.agent_id, verdict.verdict_id, verdict.score,
+        verdict.status.value, rules_triggered_names,
+    )
+
+    response = _verdict_to_dict(verdict)
+    if alert:
+        response["alert"] = {
+            "alert_id": alert.alert_id,
+            "triggered": True,
+            "message": alert.message,
+        }
+
+    return response
 
 
 @app.get("/agents")
@@ -246,6 +263,19 @@ async def list_rules():
             "CRITICAL": "0-29",
         },
     }
+
+
+@app.get("/alerts")
+async def list_alerts(agent_id: str = "", limit: int = 20):
+    """Query alerts. Optionally filter by agent."""
+    return {"alerts": alerts.get_alerts(agent_id, limit)}
+
+
+@app.post("/alerts/{alert_id}/acknowledge")
+async def acknowledge_alert(alert_id: str):
+    """Acknowledge an alert."""
+    ok = alerts.acknowledge(alert_id)
+    return {"alert_id": alert_id, "acknowledged": ok}
 
 
 # --------------- helpers ---------------

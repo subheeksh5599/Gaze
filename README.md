@@ -302,8 +302,8 @@ All thresholds are configurable. Rule set is versioned — every threshold chang
 | **Dashboard JSON** — 6-panel SigNoz dashboard (score cards, timeline, rules, evidence, cost overlay, status pie) | **Real** — `dashboards/gaze-verdict.json` |
 | **Foundry deployment** — casting.yaml + casting.yaml.lock | **Real** — `casting.yaml`, Docker Compose with SigNoz + Gaze |
 | **Multi-agent support** — register/watch multiple agents, per-agent baselines, manifests | **Real code** — /agents endpoint + AgentConfig persistence |
-| **Alert integration** — auto-create SigNoz alerts for score drops | **Roadmap** — MCP alert creation not yet wired |
-| **SigNoz MCP live integration** — real trace data from running SigNoz instance | **Real** — SigNoz self-hosted via Foundry (docker compose), UI at localhost:8080, OTLP at localhost:4317 |
+| **Alert integration** — auto-create alerts when verdict score drops below threshold, stored + queryable via API, optional Slack/Discord webhook | **Real** — `backend/gaze/alerts.py`, `/alerts` + `/alerts/{id}/acknowledge` endpoints |
+| **SigNoz MCP live integration** — real trace data from running SigNoz instance | **Real** — SigNoz self-hosted via Foundry, UI at localhost:8080, OTLP at localhost:4317 |
 
 ---
 
