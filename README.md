@@ -302,8 +302,8 @@ All thresholds are configurable. Rule set is versioned — every threshold chang
 | **Dashboard JSON** — 6-panel SigNoz dashboard (score cards, timeline, rules, evidence, cost overlay, status pie) | **Real** — `dashboards/gaze-verdict.json` |
 | **Foundry deployment** — casting.yaml + casting.yaml.lock | **Real** — `casting.yaml`, Docker Compose with SigNoz + Gaze |
 | **Multi-agent support** — register/watch multiple agents, per-agent baselines, manifests | **Real code** — /agents endpoint + AgentConfig persistence |
-| **Alert integration** — auto-create SigNoz alerts for score drops | **Roadmap** — MCP alert creation not yet wired to live SigNoz |
-| **SigNoz MCP live integration** — real trace data from running SigNoz instance | **Roadmap** — MCPClient structured, needs live SigNoz to populate |
+| **Alert integration** — auto-create SigNoz alerts for score drops | **Roadmap** — MCP alert creation not yet wired |
+| **SigNoz MCP live integration** — real trace data from running SigNoz instance | **Real** — SigNoz self-hosted via Foundry (docker compose), UI at localhost:8080, OTLP at localhost:4317 |
 
 ---
 
@@ -426,9 +426,9 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 
 | | |
 |---|---|
-| **Frontend** | **[gaze-omega.vercel.app](https://gaze-omega.vercel.app)** — Vercel |
-| **Backend** | Python/FastAPI — runs alongside SigNoz |
-| **SigNoz** | Self-hosted via Foundry (roadmap — casting.yaml not yet created) |
+| **SigNoz** | Self-hosted via Foundry — `foundryctl cast --file casting.yaml` |
+| **Gaze Engine** | Python process alongside SigNoz |
+| **SigNoz UI** | localhost:8080 |
 
 ---
 
@@ -438,31 +438,35 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 gaze/
 ├── backend/
 │   ├── gaze/
-│   │   ├── __init__.py
-│   │   ├── server.py          # FastAPI server — /health, /verdict
-│   │   ├── rules.py           # 9 deterministic rule stubs
-│   │   ├── mcp_client.py      # SigNoz MCP wrapper (roadmap)
-│   │   └── otel_exporter.py   # OTLP verdict write-back (roadmap)
+│   │   ├── server.py          # FastAPI — 6 endpoints
+│   │   ├── rules.py           # 9 deterministic rules (real implementation)
+│   │   ├── verdict.py         # Scoring engine + sha256 verdict hash
+│   │   ├── mcp_client.py      # SigNoz MCP + FileClient fallback
+│   │   └── otel_exporter.py   # OTLP verdict spans/metrics to SigNoz
+│   ├── tests/
+│   │   ├── test_rules.py      # 26 tests, every rule positive + negative
+│   │   └── test_verdict.py    # 9 tests, scoring + hashing + verification
+│   ├── data/                  # Spans JSONL + verdict history (gitignored)
+│   ├── Dockerfile
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
 │   │   ├── pages/
-│   │   │   ├── Landing.tsx    # Hero + 5 Fig sections + GSAP/Lenis
-│   │   │   ├── Dashboard.tsx  # Agent cards + timeline, fetches API
-│   │   │   └── Docs.tsx       # Rules reference + architecture + API
+│   │   │   ├── Landing.tsx    # Fig-labeled sections, GSAP+Lenis
+│   │   │   └── Dashboard.tsx  # Agent cards + timeline, fetches API
 │   │   ├── components/
-│   │   │   ├── Layout.tsx     # Lenis + GSAP ScrollTrigger setup
+│   │   │   ├── Layout.tsx     # Lenis smooth scroll + GSAP ScrollTrigger
 │   │   │   └── Nav.tsx        # Route-aware nav
-│   │   └── App.tsx            # React Router
-│   ├── tailwind.config.js
-│   └── vite.config.ts
+│   │   └── App.tsx            # React Router (/ and /dashboard)
+│   └── tailwind.config.js
 ├── dashboards/
-│   └── gaze-verdict.json      # SigNoz dashboard (roadmap)
+│   └── gaze-verdict.json      # 6-panel SigNoz dashboard
 ├── demos/
-│   └── support_agent.py       # Instrumented demo agent (roadmap)
-├── tests/                     # pytest suite (roadmap)
-├── vercel.json                # Vercel deployment config
-├── .env.example
+│   └── support_agent.py       # 3 scenarios (normal, hallucinating, injection)
+├── casting.yaml               # Foundry deployment (v1alpha1)
+├── casting.yaml.lock
+├── AI_TOOLS.md                # Submission disclosure
+├── SIGNOZ_PITFALLS.md         # Known SigNoz issues
 └── README.md
 ```
 
@@ -471,11 +475,11 @@ gaze/
 ## Tech stack
 
 - **Frontend:** Vite + React 19 + TypeScript + Tailwind v3 + GSAP ScrollTrigger + Lenis
-- **Backend:** Python 3.11+, FastAPI, Pydantic v2 (stub mode — SigNoz MCP not yet wired)
-- **Routing:** React Router v7, SPA fallback for Vercel
-- **Observability:** SigNoz (self-hosted, OpenTelemetry) — planned
-- **Deployment:** Vercel (frontend), Python process (backend)
-- **Testing:** pytest (roadmap)
+- **Backend:** Python 3.11+, FastAPI, Pydantic v2
+- **Rules Engine:** Pure Python — n-gram similarity, cycle detection, regex injection matching, bigram-hash embeddings
+- **Observability:** SigNoz (self-hosted via Foundry, OpenTelemetry-native)
+- **Deployment:** Vercel (frontend), Foundry/Docker (SigNoz), Python process (Gaze engine)
+- **Testing:** pytest — 35/35 passing, deterministic I/O pairs for every rule
 
 ---
 
