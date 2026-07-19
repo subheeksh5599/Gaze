@@ -7,7 +7,13 @@ Negative case: rule should NOT trigger (no false positives).
 """
 
 import pytest
-from gaze.rules import (
+import sys
+from pathlib import Path
+_here = Path(__file__).resolve().parent.parent / "gaze"
+if str(_here) not in sys.path:
+    sys.path.insert(0, str(_here))
+
+from rules import (
     SpanData, BaselineData, RulesConfig,
     check_repetition_loop, check_embedding_drift, check_tool_loop,
     check_unauthorized_tool, check_prompt_injection, check_cost_explosion,

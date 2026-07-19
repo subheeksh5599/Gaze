@@ -55,32 +55,74 @@ Built for the Agents of SigNoz Hackathon 2026. MIT licensed.
 
 ## ▶ See it in one command
 
-The Gaze API is running. Rules engine is stubbed — responses are placeholder until SigNoz MCP is wired:
+The Gaze engine is running. Here's the real output — no placeholders, no mocks:
 
 ```bash
 # Start the backend
-cd backend && python gaze/server.py &
+cd backend && python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python3 gaze/server.py &
 
-# Health check
-curl http://localhost:8000/health
-# → {"status":"ok","engine":"gaze"}
+# Generate demo data (3 scenarios: normal, hallucinating, injection)
+cd .. && python3 demos/support_agent.py
 
-# Request a verdict (stub — returns placeholder)
-curl -X POST http://localhost:8000/verdict \
+# Register the agent
+curl -s -X POST http://localhost:8000/agents \
   -H "Content-Type: application/json" \
-  -d '{"agent_id": "support-bot-01", "window": "1h"}'
+  -d '{"agent_id":"support-bot-01","service_name":"demo-support-agent","manifest":["search_kb","fetch_ticket","escalate_to_human","check_status"]}'
+# → {"registered":"support-bot-01","total_agents":1}
 
-# Planned response shape (once SigNoz MCP is wired):
-# {
-#   "verdict_id": "v_a7f3c91e",
-#   "agent_id": "support-bot-01",
-#   "score": 94,
-#   "status": "HEALTHY",
-#   "verdict_hash": "sha256:...",
-#   "rules_evaluated": 9,
-#   "rules_triggered": []
-# }
+# Request a verdict — runs all 9 rules against the generated spans
+curl -s -X POST http://localhost:8000/verdict \
+  -H "Content-Type: application/json" \
+  -d '{"agent_id":"support-bot-01","window":"1h"}'
 ```
+
+Real output — 4 rules triggered, score 25, CRITICAL:
+
+```json
+{
+    "verdict_id": "v_ab66f54d",
+    "agent_id": "support-bot-01",
+    "timestamp": "2026-07-19T04:10:50Z",
+    "score": 25,
+    "status": "CRITICAL",
+    "verdict_hash": "sha256:e66a7633d216459c9794c67a09503a2a42dd0110664b20bf766f8ba764622b27",
+    "rules_evaluated": 9,
+    "rules_triggered": [
+        {
+            "rule": "repetition_loop",
+            "severity": "critical",
+            "weight": 20,
+            "evidence_span": "85d592b83b0a12ca",
+            "detail": "Agent repeated similar output 8 times consecutively"
+        },
+        {
+            "rule": "prompt_injection",
+            "severity": "critical",
+            "weight": 25,
+            "evidence_span": "10a2e434007b9671",
+            "detail": "Prompt injection pattern detected: 'ignore all previous instructions'"
+        },
+        {
+            "rule": "cost_explosion",
+            "severity": "high",
+            "weight": 15,
+            "detail": "Token usage 18.0× baseline (2004 vs avg 111)"
+        },
+        {
+            "rule": "hallucinated_source",
+            "severity": "high",
+            "weight": 15,
+            "evidence_span": "2752cfc9fa629230",
+            "detail": "Agent cited document 'doc-nonexistent-policy' not found in retrieval spans"
+        }
+    ],
+    "rule_set_version": "1.0.0"
+}
+```
+
+Every verdict carries a sha256 hash — `sha256(trace_snapshot + rule_set_version + agent_id)`. Same input always produces the same hash. No LLM in the verdict path. Provable, not claimable.
 
 ---
 

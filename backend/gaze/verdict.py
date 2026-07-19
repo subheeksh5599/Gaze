@@ -11,7 +11,13 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 
-from .rules import RuleResult, RulesConfig, evaluate_all, BaselineData, SpanData, Severity
+import sys
+from pathlib import Path
+_here = Path(__file__).resolve().parent
+if str(_here) not in sys.path:
+    sys.path.insert(0, str(_here))
+
+from rules import RuleResult, RulesConfig, evaluate_all, BaselineData, SpanData, Severity
 
 
 class VerdictStatus(str, Enum):

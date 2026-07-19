@@ -12,7 +12,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from .verdict import Verdict
+import sys
+from pathlib import Path
+_here = Path(__file__).resolve().parent
+if str(_here) not in sys.path:
+    sys.path.insert(0, str(_here))
+
+from verdict import Verdict
 
 
 @dataclass

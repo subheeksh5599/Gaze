@@ -17,7 +17,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from .rules import SpanData, BaselineData
+import sys
+from pathlib import Path
+_here = Path(__file__).resolve().parent
+if str(_here) not in sys.path:
+    sys.path.insert(0, str(_here))
+
+from rules import SpanData, BaselineData
 
 
 @dataclass

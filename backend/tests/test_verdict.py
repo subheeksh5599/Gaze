@@ -3,8 +3,14 @@ Gaze Verdict Engine — pytest suite for scoring and hashing.
 """
 
 import pytest
-from gaze.verdict import compute_verdict, verify_verdict, VerdictStatus
-from gaze.rules import SpanData, RulesConfig, BaselineData
+import sys
+from pathlib import Path
+_here = Path(__file__).resolve().parent.parent / "gaze"
+if str(_here) not in sys.path:
+    sys.path.insert(0, str(_here))
+
+from verdict import compute_verdict, verify_verdict, VerdictStatus
+from rules import SpanData, RulesConfig, BaselineData
 
 
 def make_span(span_id="s1", operation="generate", input_text="", output_text="",

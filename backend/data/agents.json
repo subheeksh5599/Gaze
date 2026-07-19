@@ -1,0 +1,14 @@
+{
+  "agents": [
+    {
+      "agent_id": "support-bot-01",
+      "service_name": "demo-support-agent",
+      "manifest": [
+        "search_kb",
+        "fetch_ticket",
+        "escalate_to_human",
+        "check_status"
+      ]
+    }
+  ]
+}

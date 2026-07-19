@@ -25,10 +25,18 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from .rules import RulesConfig, SpanData, BaselineData
-from .verdict import compute_verdict, verify_verdict, Verdict
-from .mcp_client import FileClient, AgentConfig
-from .otel_exporter import OTLPExporter
+import sys
+from pathlib import Path
+
+# Support both `python -m gaze.server` and `python gaze/server.py`
+_here = Path(__file__).resolve().parent
+if str(_here) not in sys.path:
+    sys.path.insert(0, str(_here))
+
+from rules import RulesConfig, SpanData, BaselineData
+from verdict import compute_verdict, verify_verdict, Verdict
+from mcp_client import FileClient, AgentConfig
+from otel_exporter import OTLPExporter
 
 # --------------- config ---------------
 
@@ -215,7 +223,7 @@ async def recompute_verdict(req: RecomputeRequest):
 async def list_rules():
     """List all rules with thresholds and weights."""
     cfg = RulesConfig()
-    from .rules import RULE_WEIGHTS, INJECTION_PATTERNS
+    from rules import RULE_WEIGHTS, INJECTION_PATTERNS
 
     return {
         "rules": [
