@@ -290,9 +290,9 @@ async def ingest_spans(spans: list[dict]):
 
     # Group by first span's agent — spans don't carry agent_id directly,
     # so we use the service_name or infer from trace context
-    agent_id = spans[0].get("agent_id", "unknown")
+    agent_id = spans[0].pop("agent_id", "unknown")
     existing = file_client.load_spans(agent_id)
-    new_spans = [SpanData(**s) for s in spans if "span_id" in s]
+    new_spans = [SpanData(**{k: v for k, v in s.items() if k != "agent_id"}) for s in spans if "span_id" in s]
     all_spans = existing + new_spans
     file_client.save_spans(agent_id, all_spans)
     return {"ingested": len(new_spans), "agent_id": agent_id, "total_spans": len(all_spans)}

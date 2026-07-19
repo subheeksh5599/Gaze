@@ -9,6 +9,13 @@
         "escalate_to_human",
         "check_status"
       ]
+    },
+    {
+      "agent_id": "test-bot",
+      "service_name": "test-bot",
+      "manifest": [
+        "search_kb"
+      ]
     }
   ]
 }

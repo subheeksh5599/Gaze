@@ -235,6 +235,7 @@ class Gaze:
                 "tool_args": s.tool_args, "retrieved_docs": s.retrieved_docs,
                 "cited_docs": s.cited_docs, "duration_ms": s.duration_ms,
                 "start_time_ns": s.start_time_ns, "status_code": s.status_code,
+                "agent_id": self.agent_id,
             } for s in self._spans]).encode()
             req = urllib.request.Request(
                 f"{self.api_url}/ingest", data=data,
