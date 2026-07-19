@@ -43,7 +43,9 @@ class AlertManager:
         }
 
     def should_alert(self, score: int, status: str) -> bool:
-        """Check if this score should trigger an alert."""
+        """Check if this score should trigger an alert. HEALTHY never alerts."""
+        if status == "HEALTHY":
+            return False
         threshold = self._alert_thresholds.get(status, 100)
         return score < threshold
 
