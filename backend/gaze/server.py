@@ -336,8 +336,48 @@ def _format_time(ts: str) -> str:
         return ts
 
 
-# --------------- main ---------------
+# --------------- startup ---------------
 
+def _seed_demo_data():
+    """Populate demo spans if data directory is empty — so Render deployment works out of the box."""
+    spans_file = DATA_DIR / "support-bot-01_spans.jsonl"
+    if spans_file.exists():
+        return  # already seeded
+
+    try:
+        # Import the demo agent from the project root
+        import sys as _sys
+        _root = Path(__file__).resolve().parent.parent.parent  # backend/gaze/server.py → root
+        _demos = _root / "demos"
+        if str(_demos) not in _sys.path:
+            _sys.path.insert(0, str(_demos))
+        from support_agent import DemoAgent
+
+        agent = DemoAgent("support-bot-01", data_dir=str(DATA_DIR))
+        agent.run_normal()
+        agent.run_hallucinating()
+        agent.run_injection()
+
+        # Register agent
+        file_client.save_agents([AgentConfig(
+            agent_id="support-bot-01",
+            service_name="demo-support-agent",
+            manifest=["search_kb", "fetch_ticket", "escalate_to_human", "check_status"],
+        )])
+
+        # Generate initial verdict
+        spans = file_client.load_spans("support-bot-01")
+        baseline = BaselineData.from_spans(spans)
+        verdict = compute_verdict(spans, "support-bot-01", baseline=baseline)
+        file_client.save_verdict("support-bot-01", _verdict_to_dict(verdict))
+
+        print(f"[gaze] seeded demo data: {len(spans)} spans, score={verdict.score}, status={verdict.status.value}")
+    except Exception as e:
+        print(f"[gaze] seed skipped: {e}")
+
+
+# Seed on import if running as main
 if __name__ == "__main__":
+    _seed_demo_data()
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8000")))

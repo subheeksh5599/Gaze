@@ -427,8 +427,25 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 | | |
 |---|---|
 | **SigNoz** | Self-hosted via Foundry — `foundryctl cast --file casting.yaml` |
-| **Gaze Engine** | Python process alongside SigNoz |
+| **Gaze Backend** | Render (or Python process alongside SigNoz) |
+| **Frontend** | **[gaze-omega.vercel.app](https://gaze-omega.vercel.app)** — Vercel |
 | **SigNoz UI** | localhost:8080 |
+
+### One-click Render deploy
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/subheeksh5599/Gaze)
+
+Or manually:
+1. Go to [render.com](https://render.com) → New Web Service
+2. Connect repo: `subheeksh5599/Gaze`
+3. Runtime: Python 3, Build: `pip install -r backend/requirements.txt`, Start: `cd backend && python3 gaze/server.py`
+4. Set env var: `PORT=8000`
+
+After deploy, update `frontend/.env.production` with the Render URL and redeploy Vercel:
+```bash
+# In frontend/.env.production:
+VITE_API_URL=https://your-app.onrender.com
+```
 
 ---
 

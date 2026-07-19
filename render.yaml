@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: gaze-backend
+    runtime: python
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && python3 gaze/server.py
+    envVars:
+      - key: GAZE_DATA_DIR
+        value: /tmp/gaze-data
+      - key: PYTHON_VERSION
+        value: 3.11.0
+    autoDeploy: true
