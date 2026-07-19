@@ -38,6 +38,7 @@ from verdict import compute_verdict, verify_verdict, Verdict
 from mcp_client import FileClient, AgentConfig
 from otel_exporter import OTLPExporter
 from alerts import AlertManager
+from signoz_client import SigNozClient
 
 # --------------- config ---------------
 
@@ -57,6 +58,7 @@ app.add_middleware(
 file_client = FileClient(str(DATA_DIR))
 otel = OTLPExporter(data_dir=str(DATA_DIR))
 alerts = AlertManager(str(DATA_DIR))
+signoz = SigNozClient()
 
 
 # --------------- models ---------------
@@ -64,6 +66,7 @@ alerts = AlertManager(str(DATA_DIR))
 class VerdictRequest(BaseModel):
     agent_id: str
     window: str = "1h"
+    source: str = "file"  # "file" or "signoz"
 
 
 class RegisterAgentRequest(BaseModel):
@@ -97,8 +100,13 @@ async def health():
 @app.post("/verdict")
 async def get_verdict(req: VerdictRequest):
     """Request a verdict for an agent. Runs rules against stored spans."""
-    # Load spans for this agent
-    spans = file_client.load_spans(req.agent_id)
+    # Load spans — from SigNoz or file
+    if req.source == "signoz":
+        spans = signoz.fetch_spans(service_name=req.agent_id, minutes=60)
+        baseline = None  # SigNoz handles baselines via metrics
+    else:
+        spans = file_client.load_spans(req.agent_id)
+        baseline = file_client.load_baseline(req.agent_id)
     if not spans:
         return {
             "verdict_id": "v_empty",
@@ -110,11 +118,16 @@ async def get_verdict(req: VerdictRequest):
             "rules_evaluated": 9,
             "rules_triggered": [],
             "evidence": [],
-            "detail": "No trace data available — instrument your agent with OpenTelemetry and send spans to SigNoz",
+            "source": req.source,
+            "detail": "No trace data available" + (" — instrument your agent with OpenTelemetry and send spans to SigNoz" if req.source == "signoz" else " — run the demo agent to generate spans"),
         }
 
-    # Load or compute baseline
-    baseline = file_client.load_baseline(req.agent_id)
+    # Baseline: use provided baseline, or compute from spans for file mode
+    # SigNoz mode doesn't need baseline (uses its own metrics)
+    if baseline is None and req.source == "file":
+        baseline = file_client.load_baseline(req.agent_id)
+        if baseline is None:
+            baseline = BaselineData.from_spans(spans)
     if baseline is None:
         baseline = BaselineData.from_spans(spans)
 
