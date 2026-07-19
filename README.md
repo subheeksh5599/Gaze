@@ -55,7 +55,48 @@ Built for the Agents of SigNoz Hackathon 2026. MIT licensed.
 
 ## ▶ See it in one command
 
-The Gaze engine is running. Here's the real output — no placeholders, no mocks:
+**Quick start — wrap YOUR agent in one line:**
+
+```python
+from gaze_sdk import Gaze
+
+gaze = Gaze(agent_id="my-agent", api_url="https://gaze-4fy2.onrender.com")
+
+@gaze.watch
+def my_ai_agent(query: str) -> str:
+    # your LangChain / CrewAI / raw LLM call here
+    return llm.generate(query)
+
+# Run your agent normally
+response = my_ai_agent("Where is my order?")
+# → agent runs, spans auto-recorded, verdict auto-generated
+
+# Check the verdict
+verdict = gaze.verdict()
+print(f"Score: {verdict['score']}/100, Status: {verdict['status']}")
+# → Score: 94/100, Status: HEALTHY
+
+# Check alerts
+alerts = gaze.alerts()
+# → [] (no alerts — agent is healthy)
+```
+
+That's it. One decorator. No infrastructure changes. Gaze watches every call,
+runs 9 deterministic rules, and tells you when your agent breaks.
+
+**Full demo — run the built-in demo for the complete story:**
+
+```bash
+# Terminal 1: start the backend
+cd backend && python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python3 gaze/server.py &
+
+# Terminal 2: run the demo (shows HEALTHY → CRITICAL drop)
+cd .. && python3 demos/demo_verdict_drop.py
+```
+
+Real output from the demo:
 
 ```bash
 # Start the backend

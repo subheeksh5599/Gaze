@@ -278,6 +278,26 @@ async def acknowledge_alert(alert_id: str):
     return {"alert_id": alert_id, "acknowledged": ok}
 
 
+@app.post("/ingest")
+async def ingest_spans(spans: list[dict]):
+    """Ingest spans directly from the Gaze SDK.
+
+    POST a list of span dicts in SpanData format.
+    Appends to the agent's spans file.
+    """
+    if not spans:
+        return {"ingested": 0}
+
+    # Group by first span's agent — spans don't carry agent_id directly,
+    # so we use the service_name or infer from trace context
+    agent_id = spans[0].get("agent_id", "unknown")
+    existing = file_client.load_spans(agent_id)
+    new_spans = [SpanData(**s) for s in spans if "span_id" in s]
+    all_spans = existing + new_spans
+    file_client.save_spans(agent_id, all_spans)
+    return {"ingested": len(new_spans), "agent_id": agent_id, "total_spans": len(all_spans)}
+
+
 # --------------- helpers ---------------
 
 def _verdict_to_dict(v: Verdict) -> dict:
