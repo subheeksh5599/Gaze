@@ -172,6 +172,16 @@ class FileClient:
                 "agents": [{"agent_id": a.agent_id, "service_name": a.service_name, "manifest": a.manifest} for a in agents]
             }, f, indent=2)
 
+    def reset_agent(self, agent_id: str) -> dict:
+        """Delete all data for an agent — spans, baselines, verdicts."""
+        removed = []
+        for suffix in ["_spans.jsonl", "_baseline.json", "_verdicts.jsonl"]:
+            path = self.data_dir / f"{agent_id}{suffix}"
+            if path.exists():
+                path.unlink()
+                removed.append(str(path.name))
+        return {"agent_id": agent_id, "removed": removed}
+
     def load_verdicts(self, agent_id: str, limit: int = 50) -> list[dict]:
         """Load verdict history from disk."""
         path = self.data_dir / f"{agent_id}_verdicts.jsonl"

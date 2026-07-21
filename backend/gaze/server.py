@@ -9,6 +9,8 @@ Endpoints:
   GET  /history         — query verdict history
   POST /recompute       — verify a verdict hash
   GET  /rules           — list all rules with thresholds
+  POST /ingest          — ingest spans from SDK
+  POST /reset           — clear data for an agent (or all)
 
 Architecture:
   FileClient (data/) → Rules Engine → Verdict Scorer → OTLP Exporter
@@ -309,6 +311,23 @@ async def ingest_spans(spans: list[dict]):
     all_spans = existing + new_spans
     file_client.save_spans(agent_id, all_spans)
     return {"ingested": len(new_spans), "agent_id": agent_id, "total_spans": len(all_spans)}
+
+
+@app.post("/reset")
+async def reset_agent(agent_id: str = ""):
+    """Reset data for an agent — clears spans, baselines, verdicts.
+
+    Pass agent_id to reset one agent. Empty string resets ALL agents.
+    """
+    if agent_id:
+        result = file_client.reset_agent(agent_id)
+        return result
+    # Reset all known agents
+    agents = file_client.load_agents()
+    results = []
+    for a in agents:
+        results.append(file_client.reset_agent(a.agent_id))
+    return {"reset_all": True, "results": results}
 
 
 # --------------- helpers ---------------
