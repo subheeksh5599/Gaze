@@ -536,6 +536,55 @@ export default function Dashboard() {
                     </div>
                   )}
 
+                  {/* Data source attribution */}
+                  <div className="border-t border-ash/10 pt-4">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ash/50 mb-2">Data source</p>
+                    <div className="text-xs text-ash/60 leading-relaxed space-y-1">
+                      {evidenceModal.rule === 'prompt_injection' && (
+                        <p>
+                          Prompt from{' '}
+                          <a href="https://github.com/verazuo/jailbreak_llms" target="_blank" rel="noopener noreferrer" className="text-flame/70 hover:text-flame underline">
+                            github.com/verazuo/jailbreak_llms
+                          </a>
+                          {' '}— 1,300+ real jailbreak prompts scraped from Discord and Reddit. 47 regex patterns match known injection vectors including DAN, developer mode, system override, and prompt leaking.
+                        </p>
+                      )}
+                      {evidenceModal.rule === 'hallucinated_source' && (
+                        <p>
+                          Question from{' '}
+                          <a href="https://github.com/sylinrl/TruthfulQA" target="_blank" rel="noopener noreferrer" className="text-flame/70 hover:text-flame underline">
+                            github.com/sylinrl/TruthfulQA
+                          </a>
+                          {' '}— 817 questions where LLMs consistently generate false answers. The agent cited a source that does not exist in any retrieval index.
+                        </p>
+                      )}
+                      {evidenceModal.rule === 'cost_explosion' && (
+                        <p>
+                          Token baseline computed from agent history. Threshold: 3× 7-day rolling average. Rules engine:{' '}
+                          <a href="https://github.com/subheeksh5599/Gaze/blob/main/backend/gaze/rules.py" target="_blank" rel="noopener noreferrer" className="text-flame/70 hover:text-flame underline">
+                            github.com/subheeksh5599/Gaze
+                          </a>
+                        </p>
+                      )}
+                      {evidenceModal.rule === 'repetition_loop' && (
+                        <p>
+                          N-gram Jaccard similarity across consecutive spans. Rules engine:{' '}
+                          <a href="https://github.com/subheeksh5599/Gaze/blob/main/backend/gaze/rules.py" target="_blank" rel="noopener noreferrer" className="text-flame/70 hover:text-flame underline">
+                            github.com/subheeksh5599/Gaze
+                          </a>
+                        </p>
+                      )}
+                      {!['prompt_injection','hallucinated_source','cost_explosion','repetition_loop'].includes(evidenceModal.rule) && (
+                        <p>
+                          Rules engine — 9 deterministic rules, no LLM in verdict path.{' '}
+                          <a href="https://github.com/subheeksh5599/Gaze" target="_blank" rel="noopener noreferrer" className="text-flame/70 hover:text-flame underline">
+                            github.com/subheeksh5599/Gaze
+                          </a>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
                   {/* Verdict hash — proof of determinism */}
                   <div className="border-t border-ash/10 pt-4">
                     <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ash/50 mb-2">Deterministic proof</p>
