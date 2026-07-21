@@ -117,6 +117,38 @@ export default function Dashboard() {
           ease: 'power3.out',
         }
       );
+      // Animate architecture steps
+      gsap.fromTo(
+        containerRef.current!.querySelectorAll('.arch-step'),
+        { y: 30, autoAlpha: 0, scale: 0.95 },
+        {
+          y: 0,
+          autoAlpha: 1,
+          scale: 1,
+          duration: 0.6,
+          stagger: 0.15,
+          ease: 'power3.out',
+          scrollTrigger: {
+            trigger: containerRef.current!.querySelector('.arch-step'),
+            start: 'top 85%',
+          },
+        }
+      );
+      gsap.fromTo(
+        containerRef.current!.querySelectorAll('.arch-arrow'),
+        { autoAlpha: 0, scale: 0 },
+        {
+          autoAlpha: 1,
+          scale: 1,
+          duration: 0.3,
+          stagger: 0.15,
+          ease: 'back.out(2)',
+          scrollTrigger: {
+            trigger: containerRef.current!.querySelector('.arch-step'),
+            start: 'top 85%',
+          },
+        }
+      );
     });
     return () => ctx.revert();
   }, []);
@@ -371,32 +403,63 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Story section — explains the timeline to judges */}
-        <div className="dash-reveal mt-16 border border-ash/20 p-8">
-          <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-ash mb-4">
-            What you're seeing
+        {/* Architecture — how Gaze works */}
+        <div className="dash-reveal mt-16 border border-ash/20 p-8 md:p-12">
+          <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-ash mb-8">
+            How Gaze works
           </p>
-          <div className="space-y-3 text-sm text-ash leading-relaxed max-w-2xl">
-            <p>
-              <span className="text-bone">support-bot-01</span> — stable at 94. No rules triggered.
-              A well-behaved agent serving customers without issues.
+          
+          <div className="flex flex-col md:flex-row items-center gap-4 md:gap-0 max-w-4xl mx-auto">
+            {/* Step 1: AI Agent */}
+            <div className="arch-step flex-1 border border-ash/20 p-5 text-center md:text-left">
+              <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-ash/50 mb-2">01 · Your Agent</p>
+              <p className="font-mono text-xs text-bone mb-1">LangChain · CrewAI · AutoGen</p>
+              <p className="font-mono text-[10px] text-ash/60">emits OTel spans</p>
+              <p className="font-mono text-[10px] text-ash/60">with GenAI conventions</p>
+            </div>
+
+            {/* Arrow */}
+            <div className="arch-arrow font-mono text-flame/40 text-lg md:mx-2">→</div>
+
+            {/* Step 2: SigNoz */}
+            <div className="arch-step flex-1 border border-ash/20 p-5 text-center md:text-left">
+              <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-ash/50 mb-2">02 · SigNoz</p>
+              <p className="font-mono text-xs text-bone mb-1">Traces · Metrics · Logs</p>
+              <p className="font-mono text-[10px] text-ash/60">OpenTelemetry native</p>
+              <p className="font-mono text-[10px] text-ash/60">ClickHouse storage</p>
+            </div>
+
+            {/* Arrow */}
+            <div className="arch-arrow font-mono text-flame/40 text-lg md:mx-2">→</div>
+
+            {/* Step 3: Gaze Engine */}
+            <div className="arch-step flex-1 border border-flame/20 bg-flame/[0.03] p-5 text-center md:text-left">
+              <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-flame/60 mb-2">03 · Gaze Engine</p>
+              <p className="font-mono text-xs text-bone mb-1">9 deterministic rules</p>
+              <p className="font-mono text-[10px] text-ash/60">No LLM in verdict path</p>
+              <p className="font-mono text-[10px] text-ash/60">Bigram-hash embeddings</p>
+            </div>
+
+            {/* Arrow */}
+            <div className="arch-arrow font-mono text-flame/40 text-lg md:mx-2">→</div>
+
+            {/* Step 4: Verdict */}
+            <div className="arch-step flex-1 border border-ash/20 p-5 text-center md:text-left">
+              <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-ash/50 mb-2">04 · Verdict</p>
+              <p className="font-mono text-xs text-bone mb-1">Score 0–100</p>
+              <p className="font-mono text-[10px] text-ash/60">sha256 recomputable</p>
+              <p className="font-mono text-[10px] text-ash/60">Alert if degraded</p>
+            </div>
+          </div>
+
+          {/* Bottom proof line */}
+          <div className="mt-8 pt-6 border-t border-ash/10 text-center">
+            <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-ash/50 mb-2">The Proof</p>
+            <p className="font-mono text-xs text-ash/60">
+              verdict_hash = <span className="text-flame/70">sha256</span>(trace_snapshot + rule_set_version + agent_id)
             </p>
-            <p>
-              <span className="text-bone">code-reviewer</span> — started at 88, dropped to 72.
-              Token costs spiked and latency degraded. Gaze caught it before users noticed.
-            </p>
-            <p>
-              <span className="text-bone">data-pipeline</span> — degraded from 55 to 44.
-              Tool loop detected (A→B→A→B cycle) plus hallucinated source citations.
-            </p>
-            <p>
-              <span className="text-bone">customer-agent</span> — critical at 25.
-              Someone sent "ignore all previous instructions." Agent repeated the leak,
-              costs exploded 18× baseline. Gaze fired an alert immediately.
-            </p>
-            <p className="text-ash/60 mt-4 font-mono text-xs">
-              Every score is recomputable: sha256(trace snapshot + rule set version + agent ID).
-              No LLM in the verdict path. Anyone can verify.
+            <p className="font-mono text-[10px] text-ash/40 mt-2">
+              Same input always produces the same hash. Recomputable in your browser. Provable, not claimable.
             </p>
           </div>
         </div>
