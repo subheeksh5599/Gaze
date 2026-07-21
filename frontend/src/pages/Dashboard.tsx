@@ -355,7 +355,7 @@ export default function Dashboard() {
                   {entry.rules.length > 0 && (
                     <button
                       onClick={() => {
-                        const ev = entry.evidence?.[0];
+                        const ev = entry.evidence?.find(e => e.evidence_span_id);
                         if (ev) openEvidence(entry.agent, ev.evidence_span_id, ev.rule, ev.detail);
                       }}
                       className="font-mono text-[10px] uppercase tracking-[0.1em] text-flame/60 hover:text-flame shrink-0 transition-colors cursor-pointer"
