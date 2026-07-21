@@ -212,6 +212,7 @@ export default function Dashboard() {
 
   const openEvidence = async (agent: string, spanId: string, rule: string, detail: string) => {
     if (!spanId) return;
+    document.body.style.overflow = 'hidden';
     setEvidenceModal({ agent, spanId, rule, detail });
     setEvidenceLoading(true);
     setEvidenceData(null);
@@ -223,6 +224,7 @@ export default function Dashboard() {
   };
 
   const closeEvidence = () => {
+    document.body.style.overflow = '';
     setEvidenceModal(null);
     setEvidenceData(null);
   };
