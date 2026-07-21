@@ -70,6 +70,11 @@ export default function Landing() {
     return () => ctx.revert();
   }, []);
 
+  // Warm up Render backend (free tier spins down after 15min idle)
+  useEffect(() => {
+    fetch('https://gaze-4fy2.onrender.com/health').catch(() => {});
+  }, []);
+
   return (
     <main>
       {/* HERO */}

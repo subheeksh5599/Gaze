@@ -418,6 +418,8 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 
 ## Deploy
 
+> **Note on Render free tier:** The backend API at `gaze-4fy2.onrender.com` runs on Render's free tier, which spins down after 15 minutes of inactivity. The first API call after idle may take 30–60 seconds to wake up. The frontend automatically pings the API on page load to trigger wake-up. If your first visit shows a loading state, wait ~30 seconds and refresh.
+
 | | |
 |---|---|
 | **SigNoz** | Self-hosted via Foundry — `foundryctl cast --file casting.yaml` |
@@ -487,7 +489,7 @@ gaze/
 
 - **Frontend:** Vite + React 19 + TypeScript + Tailwind v3 + GSAP ScrollTrigger + Lenis
 - **Backend:** Python 3.11+, FastAPI, Pydantic v2
-- **Rules Engine:** Pure Python — n-gram similarity, cycle detection, regex injection matching, bigram-hash embeddings
+- **Rules Engine:** Pure Python — n-gram similarity, cycle detection, regex injection matching, bigram-hash embeddings. Embeddings use character bigram hashing (no ML model, no LLM) — each output text is tokenized into character bigrams, hashed to a fixed-length vector, and compared via cosine distance from the agent's baseline. Zero external dependencies, fully deterministic.
 - **Observability:** SigNoz (self-hosted via Foundry, OpenTelemetry-native)
 - **Deployment:** Vercel (frontend), Foundry/Docker (SigNoz), Python process (Gaze engine)
 - **Testing:** pytest — 35/35 passing, deterministic I/O pairs for every rule

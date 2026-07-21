@@ -109,6 +109,9 @@ export default function Dashboard() {
     async function fetchData() {
       setLoading(true);
 
+      // Wake up Render (free tier spins down after 15min idle)
+      try { await fetch(`${API_BASE}/health`); } catch {}
+
       try {
         const [agentsRes, historyRes] = await Promise.allSettled([
           fetch(`${API_BASE}/agents`),
