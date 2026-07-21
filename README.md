@@ -67,13 +67,13 @@ curl -s -X POST https://gaze-4fy2.onrender.com/verdict \
   -d '{"agent_id":"customer-agent"}'
 ```
 
-Real output from the live Render API — 102 spans from real datasets, rules engine evaluated:
+Real output from the live Render API — 72 spans from real datasets, rules engine evaluated:
 
 ```json
 {
     "verdict_id": "v_a5b6db72",
     "agent_id": "customer-agent",
-    "score": 65,
+    "score": 60,
     "status": "WARNING",
     "verdict_hash": "sha256:145a2e5f684f02f44f404d91896a47f056b0c8731350b98e...",
     "rules_evaluated": 9,
@@ -86,7 +86,7 @@ Real output from the live Render API — 102 spans from real datasets, rules eng
         {
             "rule": "cost_explosion",
             "severity": "high",
-            "detail": "Token usage 18.0× baseline"
+            "detail": "Token usage 6.0× baseline"
         }
     ]
 }
@@ -280,7 +280,7 @@ All thresholds are configurable. Rule set is versioned — every threshold chang
 | **Multi-agent support** — register/watch multiple agents, per-agent baselines, manifests | **Real code** — /agents endpoint + AgentConfig persistence |
 | **SigNoz pipeline** — OTLP traces → ClickHouse → Gaze → verdict | **Live** — 12 real traces ingested, SigNoz admin registered, ClickHouse queried via docker exec |
 | **Alert integration** — auto-create alerts when verdict score drops below threshold, stored + queryable via API, optional Slack/Discord webhook | **Real** — `backend/gaze/alerts.py`, `/alerts` + `/alerts/{id}/acknowledge` endpoints |
-| **Data pipeline** — 102 spans across 4 agents, real prompt injection + hallucination datasets | **Real** — `scripts/seed_real_data.py`, verazuo/jailbreak_llms + TruthfulQA |
+| **Data pipeline** — 72 spans across 4 agents, real prompt injection + hallucination datasets | **Real** — `scripts/seed_real_data.py`, verazuo/jailbreak_llms + TruthfulQA |
 | **Foundry deployment** — casting.yaml + casting.yaml.lock | **Real** — `casting.yaml` (v1alpha1), `foundryctl cast` deploys SigNoz |
 | **SDK** — `@gaze.watch` decorator, one-line agent integration | **Real code** — `backend/gaze/gaze_sdk.py`, live on Render |
 | **Reset** — clear agent data and re-seed fresh | **Real** — `POST /reset?agent_id=X` |
