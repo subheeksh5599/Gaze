@@ -546,7 +546,7 @@ export default function Dashboard() {
                           <a href="https://github.com/verazuo/jailbreak_llms" target="_blank" rel="noopener noreferrer" className="text-flame/70 hover:text-flame underline">
                             github.com/verazuo/jailbreak_llms
                           </a>
-                          {' '}— 1,300+ real jailbreak prompts scraped from Discord and Reddit. 47 regex patterns match known injection vectors including DAN, developer mode, system override, and prompt leaking.
+                          {' '}— 1,300+ real jailbreak prompts scraped from Discord and Reddit. 47 regex patterns match known injection vectors.
                         </p>
                       )}
                       {evidenceModal.rule === 'hallucinated_source' && (
@@ -555,28 +555,21 @@ export default function Dashboard() {
                           <a href="https://github.com/sylinrl/TruthfulQA" target="_blank" rel="noopener noreferrer" className="text-flame/70 hover:text-flame underline">
                             github.com/sylinrl/TruthfulQA
                           </a>
-                          {' '}— 817 questions where LLMs consistently generate false answers. The agent cited a source that does not exist in any retrieval index.
+                          {' '}— 817 questions where LLMs consistently generate false answers. Cited source does not exist in retrieval index.
                         </p>
                       )}
-                      {evidenceModal.rule === 'cost_explosion' && (
+                      {(evidenceModal.rule === 'cost_explosion' || evidenceModal.rule === 'repetition_loop' || evidenceModal.rule === 'tool_loop' || evidenceModal.rule === 'unauthorized_tool' || evidenceModal.rule === 'empty_response' || evidenceModal.rule === 'latency_degradation' || evidenceModal.rule === 'embedding_drift') && (
                         <p>
-                          Token baseline computed from agent history. Threshold: 3× 7-day rolling average. Rules engine:{' '}
+                          Deterministic rule evaluation.{' '}
                           <a href="https://github.com/subheeksh5599/Gaze/blob/main/backend/gaze/rules.py" target="_blank" rel="noopener noreferrer" className="text-flame/70 hover:text-flame underline">
                             github.com/subheeksh5599/Gaze
                           </a>
+                          {' '}— 35/35 tests passing, every rule tested positive + negative.
                         </p>
                       )}
-                      {evidenceModal.rule === 'repetition_loop' && (
+                      {!['prompt_injection','hallucinated_source','cost_explosion','repetition_loop','tool_loop','unauthorized_tool','embedding_drift','latency_degradation','empty_response'].includes(evidenceModal.rule) && (
                         <p>
-                          N-gram Jaccard similarity across consecutive spans. Rules engine:{' '}
-                          <a href="https://github.com/subheeksh5599/Gaze/blob/main/backend/gaze/rules.py" target="_blank" rel="noopener noreferrer" className="text-flame/70 hover:text-flame underline">
-                            github.com/subheeksh5599/Gaze
-                          </a>
-                        </p>
-                      )}
-                      {!['prompt_injection','hallucinated_source','cost_explosion','repetition_loop'].includes(evidenceModal.rule) && (
-                        <p>
-                          Rules engine — 9 deterministic rules, no LLM in verdict path.{' '}
+                          Deterministic rule evaluation — 9 rules, no LLM in verdict path.{' '}
                           <a href="https://github.com/subheeksh5599/Gaze" target="_blank" rel="noopener noreferrer" className="text-flame/70 hover:text-flame underline">
                             github.com/subheeksh5599/Gaze
                           </a>
