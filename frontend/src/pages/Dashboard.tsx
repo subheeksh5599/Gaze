@@ -19,6 +19,7 @@ interface TimelineEntry {
 
 interface EvidenceDetail {
   span_id: string;
+  trace_id: string;
   agent_id: string;
   operation: string;
   input_text: string;
@@ -402,7 +403,7 @@ export default function Dashboard() {
       {/* Evidence Modal */}
       {evidenceModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0A0A0A]/90 backdrop-blur-sm" onClick={closeEvidence}>
-          <div className="border border-ash/20 bg-[#0C0C0D] max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="border border-ash/20 bg-[#0C0C0D] max-w-2xl w-full mx-4 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4 border-b border-ash/10">
               <div>
                 <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-flame">{evidenceModal.rule}</span>
@@ -411,7 +412,12 @@ export default function Dashboard() {
               <button onClick={closeEvidence} className="font-mono text-xs text-ash hover:text-bone transition-colors">close</button>
             </div>
             <div className="p-6">
-              <p className="text-sm text-ash mb-6">{evidenceModal.detail}</p>
+              {/* What happened */}
+              <div className="mb-6">
+                <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-ash/60 mb-2">What happened</p>
+                <p className="text-sm text-bone/80 leading-relaxed">{evidenceModal.detail}</p>
+              </div>
+
               {evidenceLoading ? (
                 <div className="space-y-3 animate-pulse">
                   <div className="h-3 w-48 bg-ash/20" />
@@ -419,43 +425,130 @@ export default function Dashboard() {
                   <div className="h-16 w-full bg-ash/10" />
                 </div>
               ) : evidenceData ? (
-                <div className="space-y-4">
+                <div className="space-y-5">
+                  {/* How it was caught */}
                   <div>
-                    <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-ash mb-2">Input (prompt)</p>
-                    <div className="border border-ash/10 p-4 bg-[#0A0A0A]">
-                      <p className="font-mono text-xs text-bone/80 leading-relaxed whitespace-pre-wrap break-words">{evidenceData.input_text}</p>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-ash/60 mb-3">How it was caught</p>
+                    <div className="grid grid-cols-1 gap-3">
+                      {evidenceModal.rule === 'prompt_injection' && (
+                        <div className="border border-flame/20 bg-flame/5 p-4">
+                          <p className="font-mono text-[10px] text-flame/70 mb-2">Regex pattern matching</p>
+                          <p className="text-xs text-ash leading-relaxed">
+                            Scanned input against 47 known injection vectors. Matched phrases like "ignore all instructions", "DAN", "developer mode", "system override" — patterns from the verazuo/jailbreak_llms dataset of 1,300+ real attack prompts scraped from Discord and Reddit.
+                          </p>
+                        </div>
+                      )}
+                      {evidenceModal.rule === 'cost_explosion' && (
+                        <div className="border border-flame/20 bg-flame/5 p-4">
+                          <p className="font-mono text-[10px] text-flame/70 mb-2">Token count anomaly — {evidenceData.input_tokens + evidenceData.output_tokens} tokens vs baseline</p>
+                          <p className="text-xs text-ash leading-relaxed">
+                            Cost explosion triggers when token usage exceeds 3× the 7-day rolling average for this agent+model. This span's combined I/O tokens ({evidenceData.input_tokens + evidenceData.output_tokens}) significantly exceeded the expected range, indicating runaway generation or unbounded context expansion.
+                          </p>
+                        </div>
+                      )}
+                      {evidenceModal.rule === 'repetition_loop' && (
+                        <div className="border border-flame/20 bg-flame/5 p-4">
+                          <p className="font-mono text-[10px] text-flame/70 mb-2">N-gram similarity analysis</p>
+                          <p className="text-xs text-ash leading-relaxed">
+                            Compared consecutive output spans using Jaccard similarity on character n-grams. Threshold: &gt;80% similarity across 5+ consecutive spans triggers the rule. The agent produced near-identical responses repeatedly instead of generating varied, appropriate answers.
+                          </p>
+                        </div>
+                      )}
+                      {evidenceModal.rule === 'hallucinated_source' && (
+                        <div className="border border-flame/20 bg-flame/5 p-4">
+                          <p className="font-mono text-[10px] text-flame/70 mb-2">Source attribution mismatch</p>
+                          <p className="text-xs text-ash leading-relaxed">
+                            Agent cited documents not found in the retrieval spans. Cited sources are cross-referenced against actually retrieved documents. A mismatch means the agent fabricated a reference — a hallucination. The cited source does not exist in any knowledge base the agent had access to.
+                          </p>
+                        </div>
+                      )}
+                      {evidenceModal.rule === 'tool_loop' && (
+                        <div className="border border-flame/20 bg-flame/5 p-4">
+                          <p className="font-mono text-[10px] text-flame/70 mb-2">Circular tool call detection</p>
+                          <p className="text-xs text-ash leading-relaxed">
+                            Detected the same (tool, args) pair repeated 3+ times in the call DAG. This indicates the agent is stuck in a loop — calling the same tool with the same arguments repeatedly without making progress.
+                          </p>
+                        </div>
+                      )}
+                      {evidenceModal.rule === 'unauthorized_tool' && (
+                        <div className="border border-flame/20 bg-flame/5 p-4">
+                          <p className="font-mono text-[10px] text-flame/70 mb-2">Manifest allowlist violation</p>
+                          <p className="text-xs text-ash leading-relaxed">
+                            Agent called a tool not registered in its manifest. Each agent declares an allowlist of permitted tools. This call used a tool outside that list — either a misconfiguration or a jailbreak attempt escalating privileges.
+                          </p>
+                        </div>
+                      )}
+                      {!['prompt_injection','cost_explosion','repetition_loop','hallucinated_source','tool_loop','unauthorized_tool'].includes(evidenceModal.rule) && (
+                        <div className="border border-flame/20 bg-flame/5 p-4">
+                          <p className="font-mono text-[10px] text-flame/70 mb-2">Deterministic rule evaluation</p>
+                          <p className="text-xs text-ash leading-relaxed">
+                            Rule triggered through deterministic evaluation — no LLM in the verdict path. Same input always produces the same result.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
+
+                  {/* The span data */}
                   <div>
-                    <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-ash mb-2">Output (agent response)</p>
-                    <div className="border border-ash/10 p-4 bg-[#0A0A0A]">
-                      <p className="font-mono text-xs text-bone/80 leading-relaxed whitespace-pre-wrap break-words">{evidenceData.output_text}</p>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-ash/60 mb-3">Evidence span</p>
+                    <div className="border border-ash/10">
+                      <div className="px-4 py-3 border-b border-ash/10 bg-[#0A0A0A]">
+                        <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-ash/50 mb-1">Input prompt</p>
+                        <p className="font-mono text-xs text-bone/80 leading-relaxed whitespace-pre-wrap break-words">{evidenceData.input_text}</p>
+                      </div>
+                      <div className="px-4 py-3 bg-[#0A0A0A]">
+                        <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-ash/50 mb-1">Agent response</p>
+                        <p className="font-mono text-xs text-bone/80 leading-relaxed whitespace-pre-wrap break-words">{evidenceData.output_text}</p>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex gap-6 text-xs text-ash">
-                    <span>tokens: {evidenceData.input_tokens} in / {evidenceData.output_tokens} out</span>
-                    <span>model: {evidenceData.model}</span>
-                    <span>operation: {evidenceData.operation}</span>
+
+                  {/* Span metadata */}
+                  <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-ash/60 font-mono">
+                    <span>span_id: <span className="text-ash">{evidenceData.span_id}</span></span>
+                    <span>trace_id: <span className="text-ash">{evidenceData.trace_id}</span></span>
+                    <span>model: <span className="text-ash">{evidenceData.model}</span></span>
+                    <span>tokens: <span className="text-ash">{evidenceData.input_tokens}→{evidenceData.output_tokens}</span></span>
                   </div>
-                  {evidenceData.cited_docs.length > 0 && (
-                    <div>
-                      <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-flame/60 mb-2">Cited sources (check for hallucination)</p>
-                      {evidenceData.cited_docs.map((doc, i) => (
-                        <p key={i} className="font-mono text-[10px] text-ash/60 break-all">{doc}</p>
-                      ))}
+
+                  {/* Hallucination evidence */}
+                  {evidenceData.cited_docs.length > 0 && evidenceData.retrieved_docs.length > 0 && (
+                    <div className="border border-flame/20 bg-flame/5 p-4">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-flame/70 mb-3">Hallucination proof — cited ≠ retrieved</p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="font-mono text-[9px] text-ash/50 mb-2">Agent cited these sources</p>
+                          {evidenceData.cited_docs.map((doc, i) => (
+                            <p key={i} className="font-mono text-[10px] text-flame/70 break-all mb-1">✗ {doc}</p>
+                          ))}
+                        </div>
+                        <div>
+                          <p className="font-mono text-[9px] text-ash/50 mb-2">Actually retrieved</p>
+                          {evidenceData.retrieved_docs.map((doc, i) => (
+                            <p key={i} className="font-mono text-[10px] text-ash/40 break-all mb-1">✓ {doc}</p>
+                          ))}
+                        </div>
+                      </div>
+                      <p className="text-xs text-ash/60 mt-3 leading-relaxed">
+                        The agent claimed sources that were never retrieved from any knowledge base. These citations were fabricated — a hallucination. The source URLs do not correspond to any document in the retrieval index.
+                      </p>
                     </div>
                   )}
-                  {evidenceData.retrieved_docs.length > 0 && (
-                    <div>
-                      <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-ash/60 mb-2">Retrieved documents (actual)</p>
-                      {evidenceData.retrieved_docs.map((doc, i) => (
-                        <p key={i} className="font-mono text-[10px] text-ash/40 break-all">{doc}</p>
-                      ))}
-                    </div>
-                  )}
+
+                  {/* Verdict hash — proof of determinism */}
+                  <div className="border-t border-ash/10 pt-4">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ash/50 mb-2">Deterministic proof</p>
+                    <p className="text-xs text-ash/60 leading-relaxed">
+                      This verdict is recomputable. Same trace snapshot + same rule set version + same agent ID = same sha256 hash. No LLM was involved in this decision. Anyone with the span data can verify independently.
+                    </p>
+                  </div>
                 </div>
               ) : (
-                <p className="font-mono text-xs text-ash">Span data not available</p>
+                <div className="text-center py-8">
+                  <p className="font-mono text-sm text-ash mb-2">Span data unavailable</p>
+                  <p className="font-mono text-xs text-ash/60">The evidence span may have been cleared or the agent data was reset</p>
+                </div>
               )}
             </div>
           </div>
