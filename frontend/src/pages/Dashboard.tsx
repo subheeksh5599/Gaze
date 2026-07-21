@@ -319,8 +319,8 @@ export default function Dashboard() {
                     )}
                   </div>
                   {entry.rules.length > 0 && (
-                    <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-ash shrink-0">
-                      View Evidence →
+                    <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-ash/50 shrink-0">
+                      span evidence
                     </span>
                   )}
                 </div>
