@@ -55,42 +55,28 @@ Built for the Agents of SigNoz Hackathon 2026. MIT licensed.
 
 ## ▶ See it in one command
 
-**Path 1 — SDK: wrap your agent in one line:**
-
-```python
-from gaze_sdk import Gaze
-
-gaze = Gaze(agent_id="my-agent", api_url="https://gaze-4fy2.onrender.com")
-
-@gaze.watch
-def my_ai_agent(query: str) -> str:
-    return llm.generate(query)
-
-response = my_ai_agent("Where is my order?")
-verdict = gaze.verdict()
-print(f"Score: {verdict['score']}/100, Status: {verdict['status']}")
-# → Score: 94/100, Status: HEALTHY
-```
-
-**Path 2 — SigNoz: traces flow through OpenTelemetry → ClickHouse → Gaze:**
+**Live API — 4 agents monitored right now, real computed verdicts:**
 
 ```bash
-# Send OTel traces from any agent to SigNoz
-# Gaze reads them from ClickHouse and runs 9 rules
-curl -X POST http://localhost:8000/verdict \
+# List all monitored agents
+curl -s https://gaze-4fy2.onrender.com/agents
+
+# Request a verdict for the customer-facing agent
+curl -s -X POST https://gaze-4fy2.onrender.com/verdict \
   -H "Content-Type: application/json" \
-  -d '{"agent_id":"demo-agent","source":"signoz"}'
+  -d '{"agent_id":"customer-agent"}'
 ```
 
-Real output from SigNoz pipeline — 12 traces, 2 rules triggered:
+Real output from the live Render API — 102 spans from real datasets, rules engine evaluated:
 
 ```json
 {
-    "verdict_id": "v_a3f71b2c",
-    "agent_id": "demo-agent",
-    "score": 60,
+    "verdict_id": "v_a5b6db72",
+    "agent_id": "customer-agent",
+    "score": 65,
     "status": "WARNING",
-    "verdict_hash": "sha256:218c232d3d62e792636ee92e25147ad5d990717d0ed...",
+    "verdict_hash": "sha256:145a2e5f684f02f44f404d91896a47f056b0c8731350b98e...",
+    "rules_evaluated": 9,
     "rules_triggered": [
         {
             "rule": "prompt_injection",
@@ -100,23 +86,20 @@ Real output from SigNoz pipeline — 12 traces, 2 rules triggered:
         {
             "rule": "cost_explosion",
             "severity": "high",
-            "detail": "Token usage 9.8× baseline"
+            "detail": "Token usage 18.0× baseline"
         }
     ]
 }
 ```
 
-**Full demo — run the built-in demo for the complete story:**
+**Dashboard:** [gaze-omega.vercel.app/dashboard](https://gaze-omega.vercel.app/dashboard) — shows all 4 agents live. Each score is recomputable: same trace + same rule set = same hash.
 
-```bash
-# Terminal 1: start the backend
-cd backend && python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python3 gaze/server.py &
+**Data sources (all real, publicly verifiable):**
+- Prompt injection prompts from [verazuo/jailbreak_llms](https://github.com/verazuo/jailbreak_llms) — 1,300+ real jailbreak prompts scraped from Discord/Reddit
+- Hallucination-prone questions from [TruthfulQA](https://github.com/sylinrl/TruthfulQA) — the benchmark LLMs are tested against for factual accuracy
+- Policy-violating queries from the forbidden question set
 
-# Terminal 2: run the SDK demo (shows HEALTHY → WARNING drop with real agent code)
-cd .. && python3 demos/sdk_demo.py
-```
+Seed the backend with real data: `python3 scripts/seed_real_data.py`
 
 ---
 
@@ -284,7 +267,7 @@ All thresholds are configurable. Rule set is versioned — every threshold chang
 | Capability | Status |
 |---|---|
 | **Frontend** — landing, dashboard (2 routes, GSAP+Lenis, deployed) | **Live** at [gaze-omega.vercel.app](https://gaze-omega.vercel.app) |
-| **FastAPI server** — 6 endpoints: /health, /verdict, /agents, /history, /recompute, /rules | **Real code** — `backend/gaze/server.py`, Pydantic models, FileClient persistence |
+| **FastAPI server** — 8 endpoints: /health, /verdict, /agents, /history, /recompute, /rules, /ingest, /reset | **Real code** — `backend/gaze/server.py`, Pydantic models, FileClient persistence |
 | **Rules engine** — 9 rules with real detection logic (n-gram, embedding, cycle, regex) | **Real code** — `backend/gaze/rules.py`, 35/35 tests passing |
 | **Verdict engine** — weighted scoring 0-100, sha256 recomputable hash | **Real code** — `backend/gaze/verdict.py`, deterministic, no LLM in path |
 | **Landing page** — Fig-labeled sections, scroll reveals, architecture diagram | **Live** at `/` — kinetic orange brutalist, zero mock data |
@@ -297,7 +280,10 @@ All thresholds are configurable. Rule set is versioned — every threshold chang
 | **Multi-agent support** — register/watch multiple agents, per-agent baselines, manifests | **Real code** — /agents endpoint + AgentConfig persistence |
 | **SigNoz pipeline** — OTLP traces → ClickHouse → Gaze → verdict | **Live** — 12 real traces ingested, SigNoz admin registered, ClickHouse queried via docker exec |
 | **Alert integration** — auto-create alerts when verdict score drops below threshold, stored + queryable via API, optional Slack/Discord webhook | **Real** — `backend/gaze/alerts.py`, `/alerts` + `/alerts/{id}/acknowledge` endpoints |
+| **Data pipeline** — 102 spans across 4 agents, real prompt injection + hallucination datasets | **Real** — `scripts/seed_real_data.py`, verazuo/jailbreak_llms + TruthfulQA |
 | **Foundry deployment** — casting.yaml + casting.yaml.lock | **Real** — `casting.yaml` (v1alpha1), `foundryctl cast` deploys SigNoz |
+| **SDK** — `@gaze.watch` decorator, one-line agent integration | **Real code** — `backend/gaze/gaze_sdk.py`, live on Render |
+| **Reset** — clear agent data and re-seed fresh | **Real** — `POST /reset?agent_id=X` |
 
 ---
 
@@ -451,17 +437,20 @@ VITE_API_URL=https://your-app.onrender.com
 gaze/
 ├── backend/
 │   ├── gaze/
-│   │   ├── server.py          # FastAPI — 6 endpoints
+│   │   ├── server.py          # FastAPI — 8 endpoints
 │   │   ├── rules.py           # 9 deterministic rules (real implementation)
 │   │   ├── verdict.py         # Scoring engine + sha256 verdict hash
 │   │   ├── mcp_client.py      # SigNoz MCP + FileClient fallback
-│   │   └── otel_exporter.py   # OTLP verdict spans/metrics to SigNoz
+│   │   ├── otel_exporter.py   # OTLP verdict spans/metrics to SigNoz
+│   │   └── gaze_sdk.py        # @gaze.watch decorator, SDK integration
 │   ├── tests/
 │   │   ├── test_rules.py      # 26 tests, every rule positive + negative
 │   │   └── test_verdict.py    # 9 tests, scoring + hashing + verification
 │   ├── data/                  # Spans JSONL + verdict history (gitignored)
 │   ├── Dockerfile
 │   └── requirements.txt
+├── scripts/
+│   └── seed_real_data.py      # Seed backend with real datasets (jailbreak_llms + TruthfulQA)
 ├── frontend/
 │   ├── src/
 │   │   ├── pages/
