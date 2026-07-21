@@ -227,12 +227,23 @@ async def get_history(agent_id: str = "", limit: int = 20):
 
     entries = []
     for v in verdicts:
-        rules = [e["rule"] for e in v.get("evidence", [])]
+        evidence = v.get("evidence", [])
+        rules = [e["rule"] for e in evidence]
+        # Include evidence details for each triggered rule
+        rules_detail = []
+        for e in evidence:
+            rules_detail.append({
+                "rule": e["rule"],
+                "severity": e.get("severity", "warning"),
+                "evidence_span_id": e.get("evidence_span_id", ""),
+                "detail": e.get("detail", ""),
+            })
         entries.append({
             "time": _format_time(v.get("timestamp", "")),
             "agent": v.get("agent_id", ""),
             "score": v.get("score", 0),
             "rules": rules,
+            "evidence": rules_detail,
         })
 
     return {"entries": entries}
@@ -328,6 +339,31 @@ async def reset_agent(agent_id: str = ""):
     for a in agents:
         results.append(file_client.reset_agent(a.agent_id))
     return {"reset_all": True, "results": results}
+
+
+@app.get("/evidence/{agent_id}/{span_id}")
+async def get_evidence(agent_id: str, span_id: str):
+    """Fetch a specific span's details for evidence display."""
+    spans = file_client.load_spans(agent_id)
+    for s in spans:
+        if s.span_id == span_id:
+            return {
+                "span_id": s.span_id,
+                "trace_id": s.trace_id,
+                "agent_id": agent_id,
+                "operation": s.operation,
+                "model": s.model,
+                "input_tokens": s.input_tokens,
+                "output_tokens": s.output_tokens,
+                "input_text": s.input_text,
+                "output_text": s.output_text,
+                "tool_name": s.tool_name,
+                "retrieved_docs": s.retrieved_docs,
+                "cited_docs": s.cited_docs,
+                "duration_ms": s.duration_ms,
+                "status_code": s.status_code,
+            }
+    raise HTTPException(status_code=404, detail=f"span {span_id} not found for agent {agent_id}")
 
 
 # --------------- helpers ---------------

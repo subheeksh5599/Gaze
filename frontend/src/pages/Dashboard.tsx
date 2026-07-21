@@ -14,6 +14,20 @@ interface TimelineEntry {
   agent: string;
   score: number;
   rules: string[];
+  evidence?: { rule: string; severity: string; evidence_span_id: string; detail: string }[];
+}
+
+interface EvidenceDetail {
+  span_id: string;
+  agent_id: string;
+  operation: string;
+  input_text: string;
+  output_text: string;
+  input_tokens: number;
+  output_tokens: number;
+  model: string;
+  cited_docs: string[];
+  retrieved_docs: string[];
 }
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -84,6 +98,9 @@ export default function Dashboard() {
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [demoMode, setDemoMode] = useState(false);
+  const [evidenceModal, setEvidenceModal] = useState<{ agent: string; spanId: string; rule: string; detail: string } | null>(null);
+  const [evidenceData, setEvidenceData] = useState<EvidenceDetail | null>(null);
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -189,8 +206,24 @@ export default function Dashboard() {
   // Simulate "live" timestamps that update relative to page load
   const formatTime = (stored: string) => {
     if (!demoMode) return stored;
-    // In demo mode, times are relative — they look reasonable
     return stored;
+  };
+
+  const openEvidence = async (agent: string, spanId: string, rule: string, detail: string) => {
+    if (!spanId) return;
+    setEvidenceModal({ agent, spanId, rule, detail });
+    setEvidenceLoading(true);
+    setEvidenceData(null);
+    try {
+      const res = await fetch(`${API_BASE}/evidence/${agent}/${spanId}`);
+      if (res.ok) setEvidenceData(await res.json());
+    } catch {}
+    setEvidenceLoading(false);
+  };
+
+  const closeEvidence = () => {
+    setEvidenceModal(null);
+    setEvidenceData(null);
   };
 
   return (
@@ -319,9 +352,15 @@ export default function Dashboard() {
                     )}
                   </div>
                   {entry.rules.length > 0 && (
-                    <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-ash/50 shrink-0">
-                      span evidence
-                    </span>
+                    <button
+                      onClick={() => {
+                        const ev = entry.evidence?.[0];
+                        if (ev) openEvidence(entry.agent, ev.evidence_span_id, ev.rule, ev.detail);
+                      }}
+                      className="font-mono text-[10px] uppercase tracking-[0.1em] text-flame/60 hover:text-flame shrink-0 transition-colors cursor-pointer"
+                    >
+                      view evidence →
+                    </button>
                   )}
                 </div>
               ))}
@@ -359,6 +398,69 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Evidence Modal */}
+      {evidenceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0A0A0A]/90 backdrop-blur-sm" onClick={closeEvidence}>
+          <div className="border border-ash/20 bg-[#0C0C0D] max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-ash/10">
+              <div>
+                <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-flame">{evidenceModal.rule}</span>
+                <span className="font-mono text-[10px] text-ash ml-3">{evidenceModal.agent}</span>
+              </div>
+              <button onClick={closeEvidence} className="font-mono text-xs text-ash hover:text-bone transition-colors">close</button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-ash mb-6">{evidenceModal.detail}</p>
+              {evidenceLoading ? (
+                <div className="space-y-3 animate-pulse">
+                  <div className="h-3 w-48 bg-ash/20" />
+                  <div className="h-16 w-full bg-ash/10" />
+                  <div className="h-16 w-full bg-ash/10" />
+                </div>
+              ) : evidenceData ? (
+                <div className="space-y-4">
+                  <div>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-ash mb-2">Input (prompt)</p>
+                    <div className="border border-ash/10 p-4 bg-[#0A0A0A]">
+                      <p className="font-mono text-xs text-bone/80 leading-relaxed whitespace-pre-wrap break-words">{evidenceData.input_text}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-ash mb-2">Output (agent response)</p>
+                    <div className="border border-ash/10 p-4 bg-[#0A0A0A]">
+                      <p className="font-mono text-xs text-bone/80 leading-relaxed whitespace-pre-wrap break-words">{evidenceData.output_text}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-6 text-xs text-ash">
+                    <span>tokens: {evidenceData.input_tokens} in / {evidenceData.output_tokens} out</span>
+                    <span>model: {evidenceData.model}</span>
+                    <span>operation: {evidenceData.operation}</span>
+                  </div>
+                  {evidenceData.cited_docs.length > 0 && (
+                    <div>
+                      <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-flame/60 mb-2">Cited sources (check for hallucination)</p>
+                      {evidenceData.cited_docs.map((doc, i) => (
+                        <p key={i} className="font-mono text-[10px] text-ash/60 break-all">{doc}</p>
+                      ))}
+                    </div>
+                  )}
+                  {evidenceData.retrieved_docs.length > 0 && (
+                    <div>
+                      <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-ash/60 mb-2">Retrieved documents (actual)</p>
+                      {evidenceData.retrieved_docs.map((doc, i) => (
+                        <p key={i} className="font-mono text-[10px] text-ash/40 break-all">{doc}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="font-mono text-xs text-ash">Span data not available</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
