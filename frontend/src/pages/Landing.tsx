@@ -549,24 +549,20 @@ function ArchitectureSection() {
       stagger: 0.3,
     });
 
-    // Circle reveal animation — single timeline for both circle + ring
-    gsap.timeline({
+    // Circle reveal — matches zkOrigin VideoPinSection exactly
+    const proofTl = gsap.timeline({
       scrollTrigger: {
         trigger: ".proof-pin",
         start: "-15% top",
-        end: "350% top",
-        scrub: 2,
+        end: "200% top",
+        scrub: 1.5,
         pin: true,
       },
-    })
-      .to(".proof-circle", {
-        clipPath: "circle(100% at 50% 50%)",
-        ease: "power1.inOut",
-      }, 0)
-      .to(".proof-ring", {
-        width: "100%",
-        ease: "power1.inOut",
-      }, 0);
+    });
+    proofTl.to(".proof-circle", {
+      clipPath: "circle(100% at 50% 50%)",
+      ease: "power1.inOut",
+    });
   });
 
   const titles = [
@@ -625,15 +621,11 @@ function ArchitectureSection() {
       </div>
 
       {/* Circle reveal — expands as you scroll deeper */}
-      <div className="relative overlay-box mt-10 md:mt-0">
+      <div className="relative overlay-box">
         <div className="proof-pin md:h-[110vh] h-dvh overflow-hidden md:!-translate-y-[15%] md:mt-0 mt-20">
-          {/* Visible ring behind the expanding circle */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
-            <div className="rounded-full border border-flame/20 w-[12%] h-auto aspect-square proof-ring" />
-          </div>
           <div
-            style={{ clipPath: "circle(12% at 50% 50%)" }}
-            className="size-full proof-circle relative z-10"
+            style={{ clipPath: "circle(6% at 50% 50%)" }}
+            className="size-full proof-circle"
           >
             <div className="size-full flex flex-col justify-center items-center gap-6 bg-surface">
               <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
@@ -659,7 +651,7 @@ function ArchitectureSection() {
 
 function VerdictSection() {
   useGSAP(() => {
-    gsap.set(".verdict-section", { marginTop: "-50vh" });
+    gsap.set(".verdict-section", { marginTop: "-140vh" });
 
     const tl = gsap.timeline({
       scrollTrigger: {
@@ -686,7 +678,7 @@ function VerdictSection() {
   });
 
   return (
-    <section className="verdict-section bg-ink relative w-full min-h-dvh overflow-hidden">
+    <section className="verdict-section bg-ink relative w-full h-[120dvh] overflow-hidden">
       <div className="absolute size-full flex flex-col items-center pt-[5vw]">
         <h1 className="vd-title-1 font-display font-bold uppercase text-[20.5vw] leading-[105%] tracking-[-.4vw] ml-[2vw] text-bone">
           Real
@@ -699,7 +691,7 @@ function VerdictSection() {
         </h1>
       </div>
 
-      <div className="flex items-center justify-center w-full ps-52 absolute 2xl:bottom-32 bottom-[45vh]">
+      <div className="flex items-center justify-center w-full ps-52 absolute 2xl:bottom-32 bottom-[50vh]">
         {VERDICTS.map((v, i) => (
           <div
             key={v.name}
