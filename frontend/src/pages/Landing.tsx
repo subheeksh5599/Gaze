@@ -647,7 +647,7 @@ function ArchitectureSection() {
 
 function VerdictSection() {
   useGSAP(() => {
-    gsap.set(".verdict-section", { marginTop: "-45vh" });
+    gsap.set(".verdict-section", { marginTop: "-50vh" });
 
     const tl = gsap.timeline({
       scrollTrigger: {

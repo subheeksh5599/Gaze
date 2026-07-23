@@ -38,15 +38,14 @@ body {
   border-radius: 0;
 }
 
-html.lenis {
-  height: auto;
+/* zkOrigin-style utility classes used by GSAP SplitText */
+.flex-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
-.lenis.lenis-smooth {
-  scroll-behavior: auto;
-}
-.lenis.lenis-smooth [data-lenis-prevent] {
-  overscroll-behavior: contain;
-}
-.lenis.lenis-stopped {
+
+.paragraph-line {
+  white-space: nowrap;
   overflow: hidden;
 }
