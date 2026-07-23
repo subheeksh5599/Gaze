@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useEffect, useRef } from 'react';
-import gsap from 'gsap';
+import { animate } from 'animejs';
 
 const links = [
   { to: '/', label: 'Gaze' },
@@ -12,11 +12,15 @@ export default function Nav() {
   const navRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    gsap.fromTo(
-      navRef.current,
-      { y: -40, autoAlpha: 0 },
-      { y: 0, autoAlpha: 1, duration: 1, ease: 'power3.out', delay: 0.3 }
-    );
+    if (navRef.current) {
+      animate(navRef.current, {
+        translateY: [-40, 0],
+        opacity: [0, 1],
+        duration: 1000,
+        easing: 'easeOutExpo',
+        delay: 300,
+      });
+    }
   }, []);
 
   return (

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import gsap from 'gsap';
+import { animate, stagger } from 'animejs';
+import EvidenceDrawer from '@/components/EvidenceDrawer';
 
 interface AgentVerdict {
   id: string;
@@ -33,38 +34,11 @@ interface EvidenceDetail {
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-// Rich demo data that showcases Gaze's value when the backend has only
-// the single seeded scenario or is unreachable. Judges visit the website,
-// not the terminal — this makes the dashboard sell the product.
 const DEMO_AGENTS: AgentVerdict[] = [
-  {
-    id: 'support-bot-01',
-    score: 94,
-    status: 'HEALTHY',
-    lastVerdict: '2m ago',
-    rulesTriggered: 0,
-  },
-  {
-    id: 'code-reviewer',
-    score: 72,
-    status: 'WARNING',
-    lastVerdict: '2m ago',
-    rulesTriggered: 2,
-  },
-  {
-    id: 'data-pipeline',
-    score: 48,
-    status: 'DEGRADED',
-    lastVerdict: '2m ago',
-    rulesTriggered: 3,
-  },
-  {
-    id: 'customer-agent',
-    score: 25,
-    status: 'CRITICAL',
-    lastVerdict: '2m ago',
-    rulesTriggered: 4,
-  },
+  { id: 'support-bot-01', score: 94, status: 'HEALTHY', lastVerdict: '2m ago', rulesTriggered: 0 },
+  { id: 'code-reviewer', score: 72, status: 'WARNING', lastVerdict: '2m ago', rulesTriggered: 2 },
+  { id: 'data-pipeline', score: 48, status: 'DEGRADED', lastVerdict: '2m ago', rulesTriggered: 3 },
+  { id: 'customer-agent', score: 25, status: 'CRITICAL', lastVerdict: '2m ago', rulesTriggered: 4 },
 ];
 
 const DEMO_TIMELINE: TimelineEntry[] = [
@@ -84,13 +58,7 @@ const DEMO_TIMELINE: TimelineEntry[] = [
 ];
 
 function isOnlyDemoData(agents: AgentVerdict[]): boolean {
-  // If the backend returns exactly 1 agent stuck at 25 (the seeded demo),
-  // show the rich demo instead.
-  return (
-    agents.length === 1 &&
-    agents[0].id === 'support-bot-01' &&
-    agents[0].status === 'CRITICAL'
-  );
+  return agents.length === 1 && agents[0].id === 'support-bot-01' && agents[0].status === 'CRITICAL';
 }
 
 export default function Dashboard() {
@@ -105,52 +73,32 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!containerRef.current) return;
-    const ctx = gsap.context(() => {
-      gsap.fromTo(
-        containerRef.current!.querySelectorAll('.dash-reveal'),
-        { y: 40, autoAlpha: 0 },
-        {
-          y: 0,
-          autoAlpha: 1,
-          duration: 0.8,
-          stagger: 0.08,
-          ease: 'power3.out',
-        }
-      );
-      // Animate architecture steps
-      gsap.fromTo(
-        containerRef.current!.querySelectorAll('.arch-step'),
-        { y: 30, autoAlpha: 0, scale: 0.95 },
-        {
-          y: 0,
-          autoAlpha: 1,
-          scale: 1,
-          duration: 0.6,
-          stagger: 0.15,
-          ease: 'power3.out',
-          scrollTrigger: {
-            trigger: containerRef.current!.querySelector('.arch-step'),
-            start: 'top 85%',
-          },
-        }
-      );
-      gsap.fromTo(
-        containerRef.current!.querySelectorAll('.arch-arrow'),
-        { autoAlpha: 0, scale: 0 },
-        {
-          autoAlpha: 1,
-          scale: 1,
-          duration: 0.3,
-          stagger: 0.15,
-          ease: 'back.out(2)',
-          scrollTrigger: {
-            trigger: containerRef.current!.querySelector('.arch-step'),
-            start: 'top 85%',
-          },
-        }
-      );
+    const el = containerRef.current;
+    const reveals = el.querySelectorAll('.dash-reveal');
+    animate(reveals, {
+      translateY: [40, 0],
+      opacity: [0, 1],
+      duration: 800,
+      delay: stagger(80),
+      easing: 'easeOutExpo',
     });
-    return () => ctx.revert();
+
+    // Architecture steps animation — use IntersectionObserver
+    const archEls = el.querySelectorAll('.arch-step');
+    const arrowEls = el.querySelectorAll('.arch-arrow');
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          animate(archEls, { translateY: [30, 0], opacity: [0, 1], scale: [0.95, 1], duration: 600, delay: stagger(150), easing: 'easeOutExpo' });
+          animate(arrowEls, { opacity: [0, 1], scale: [0, 1], duration: 300, delay: stagger(150), easing: 'easeOutElastic(1, 0.5)' });
+          obs.disconnect();
+        }
+      },
+      { threshold: 0.15 },
+    );
+    const trigger = el.querySelector('.arch-step');
+    if (trigger) obs.observe(trigger);
+    return () => obs.disconnect();
   }, []);
 
   useEffect(() => {
@@ -158,8 +106,6 @@ export default function Dashboard() {
 
     async function fetchData() {
       setLoading(true);
-
-      // Wake up Render (free tier spins down after 15min idle)
       try { await fetch(`${API_BASE}/health`); } catch {}
 
       try {
@@ -182,21 +128,15 @@ export default function Dashboard() {
             fetchedTimeline = data.entries || [];
           }
 
-          if (
-            agentsRes.status === 'rejected' &&
-            historyRes.status === 'rejected'
-          ) {
-            // API unreachable — use demo data
+          if (agentsRes.status === 'rejected' && historyRes.status === 'rejected') {
             setDemoMode(true);
             setAgents(DEMO_AGENTS);
             setTimeline(DEMO_TIMELINE);
           } else if (isOnlyDemoData(fetchedAgents)) {
-            // Only the seeded 25/100 agent — enrich with demo
             setDemoMode(true);
             setAgents(DEMO_AGENTS);
             setTimeline(DEMO_TIMELINE);
           } else {
-            // Real multi-agent data from a live Gaze deployment
             setDemoMode(false);
             setAgents(fetchedAgents);
             setTimeline(fetchedTimeline);
@@ -204,7 +144,6 @@ export default function Dashboard() {
         }
       } catch {
         if (!cancelled) {
-          // Network error — show demo
           setDemoMode(true);
           setAgents(DEMO_AGENTS);
           setTimeline(DEMO_TIMELINE);
@@ -236,15 +175,10 @@ export default function Dashboard() {
     }
   };
 
-  // Simulate "live" timestamps that update relative to page load
-  const formatTime = (stored: string) => {
-    if (!demoMode) return stored;
-    return stored;
-  };
+  const formatTime = (stored: string) => stored;
 
   const openEvidence = async (agent: string, spanId: string, rule: string, detail: string) => {
     if (!spanId) return;
-    document.body.style.overflow = 'hidden';
     setEvidenceModal({ agent, spanId, rule, detail });
     setEvidenceLoading(true);
     setEvidenceData(null);
@@ -256,7 +190,6 @@ export default function Dashboard() {
   };
 
   const closeEvidence = () => {
-    document.body.style.overflow = '';
     setEvidenceModal(null);
     setEvidenceData(null);
   };
@@ -408,42 +341,29 @@ export default function Dashboard() {
           <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-ash mb-8">
             How Gaze works
           </p>
-          
+
           <div className="flex flex-col md:flex-row items-center gap-4 md:gap-0 max-w-4xl mx-auto">
-            {/* Step 1: AI Agent */}
             <div className="arch-step flex-1 border border-ash/20 p-5 text-center md:text-left">
               <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-ash/50 mb-2">01 · Your Agent</p>
               <p className="font-mono text-xs text-bone mb-1">LangChain · CrewAI · AutoGen</p>
               <p className="font-mono text-[10px] text-ash/60">emits OTel spans</p>
               <p className="font-mono text-[10px] text-ash/60">with GenAI conventions</p>
             </div>
-
-            {/* Arrow */}
             <div className="arch-arrow font-mono text-flame/40 text-lg md:mx-2">→</div>
-
-            {/* Step 2: SigNoz */}
             <div className="arch-step flex-1 border border-ash/20 p-5 text-center md:text-left">
               <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-ash/50 mb-2">02 · SigNoz</p>
               <p className="font-mono text-xs text-bone mb-1">Traces · Metrics · Logs</p>
               <p className="font-mono text-[10px] text-ash/60">OpenTelemetry native</p>
               <p className="font-mono text-[10px] text-ash/60">ClickHouse storage</p>
             </div>
-
-            {/* Arrow */}
             <div className="arch-arrow font-mono text-flame/40 text-lg md:mx-2">→</div>
-
-            {/* Step 3: Gaze Engine */}
             <div className="arch-step flex-1 border border-flame/20 bg-flame/[0.03] p-5 text-center md:text-left">
               <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-flame/60 mb-2">03 · Gaze Engine</p>
               <p className="font-mono text-xs text-bone mb-1">9 deterministic rules</p>
               <p className="font-mono text-[10px] text-ash/60">No LLM in verdict path</p>
               <p className="font-mono text-[10px] text-ash/60">Bigram-hash embeddings</p>
             </div>
-
-            {/* Arrow */}
             <div className="arch-arrow font-mono text-flame/40 text-lg md:mx-2">→</div>
-
-            {/* Step 4: Verdict */}
             <div className="arch-step flex-1 border border-ash/20 p-5 text-center md:text-left">
               <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-ash/50 mb-2">04 · Verdict</p>
               <p className="font-mono text-xs text-bone mb-1">Score 0–100</p>
@@ -452,7 +372,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Bottom proof line */}
           <div className="mt-8 pt-6 border-t border-ash/10 text-center">
             <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-ash/50 mb-2">The Proof</p>
             <p className="font-mono text-xs text-ash/60">
@@ -465,201 +384,179 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Evidence Modal */}
+      {/* Evidence Drawer */}
       {evidenceModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0A0A0A]/90 backdrop-blur-sm" onClick={closeEvidence}>
-          <div className="border border-ash/20 bg-[#0C0C0D] max-w-2xl w-full mx-4 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-ash/10">
-              <div>
-                <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-flame">{evidenceModal.rule}</span>
-                <span className="font-mono text-[10px] text-ash ml-3">{evidenceModal.agent}</span>
-              </div>
-              <button onClick={closeEvidence} className="font-mono text-xs text-ash hover:text-bone transition-colors">close</button>
+        <EvidenceDrawer
+          agent={evidenceModal.agent}
+          detail={evidenceModal.detail}
+          open={evidenceModal !== null}
+          rule={evidenceModal.rule}
+          onOpenChange={(open) => { if (!open) closeEvidence(); }}
+        >
+          {evidenceLoading ? (
+            <div className="space-y-3 animate-pulse">
+              <div className="h-3 w-48 bg-ash/20" />
+              <div className="h-16 w-full bg-ash/10" />
+              <div className="h-16 w-full bg-ash/10" />
             </div>
-            <div className="p-6">
-              {/* What happened */}
-              <div className="mb-6">
-                <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-ash/60 mb-2">What happened</p>
-                <p className="text-sm text-bone/80 leading-relaxed">{evidenceModal.detail}</p>
-              </div>
-
-              {evidenceLoading ? (
-                <div className="space-y-3 animate-pulse">
-                  <div className="h-3 w-48 bg-ash/20" />
-                  <div className="h-16 w-full bg-ash/10" />
-                  <div className="h-16 w-full bg-ash/10" />
-                </div>
-              ) : evidenceData ? (
-                <div className="space-y-5">
-                  {/* How it was caught */}
-                  <div>
-                    <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-ash/60 mb-3">How it was caught</p>
-                    <div className="grid grid-cols-1 gap-3">
-                      {evidenceModal.rule === 'prompt_injection' && (
-                        <div className="border border-flame/20 bg-flame/5 p-4">
-                          <p className="font-mono text-[10px] text-flame/70 mb-2">Regex pattern matching</p>
-                          <p className="text-xs text-ash leading-relaxed">
-                            Scanned input against 47 known injection vectors. Matched phrases like "ignore all instructions", "DAN", "developer mode", "system override" — patterns from the verazuo/jailbreak_llms dataset of 1,300+ real attack prompts scraped from Discord and Reddit.
-                          </p>
-                        </div>
-                      )}
-                      {evidenceModal.rule === 'cost_explosion' && (
-                        <div className="border border-flame/20 bg-flame/5 p-4">
-                          <p className="font-mono text-[10px] text-flame/70 mb-2">Token count anomaly — {evidenceData.input_tokens + evidenceData.output_tokens} tokens vs baseline</p>
-                          <p className="text-xs text-ash leading-relaxed">
-                            Cost explosion triggers when token usage exceeds 3× the 7-day rolling average for this agent+model. This span's combined I/O tokens ({evidenceData.input_tokens + evidenceData.output_tokens}) significantly exceeded the expected range, indicating runaway generation or unbounded context expansion.
-                          </p>
-                        </div>
-                      )}
-                      {evidenceModal.rule === 'repetition_loop' && (
-                        <div className="border border-flame/20 bg-flame/5 p-4">
-                          <p className="font-mono text-[10px] text-flame/70 mb-2">N-gram similarity analysis</p>
-                          <p className="text-xs text-ash leading-relaxed">
-                            Compared consecutive output spans using Jaccard similarity on character n-grams. Threshold: &gt;80% similarity across 5+ consecutive spans triggers the rule. The agent produced near-identical responses repeatedly instead of generating varied, appropriate answers.
-                          </p>
-                        </div>
-                      )}
-                      {evidenceModal.rule === 'hallucinated_source' && (
-                        <div className="border border-flame/20 bg-flame/5 p-4">
-                          <p className="font-mono text-[10px] text-flame/70 mb-2">Source attribution mismatch</p>
-                          <p className="text-xs text-ash leading-relaxed">
-                            Agent cited documents not found in the retrieval spans. Cited sources are cross-referenced against actually retrieved documents. A mismatch means the agent fabricated a reference — a hallucination. The cited source does not exist in any knowledge base the agent had access to.
-                          </p>
-                        </div>
-                      )}
-                      {evidenceModal.rule === 'tool_loop' && (
-                        <div className="border border-flame/20 bg-flame/5 p-4">
-                          <p className="font-mono text-[10px] text-flame/70 mb-2">Circular tool call detection</p>
-                          <p className="text-xs text-ash leading-relaxed">
-                            Detected the same (tool, args) pair repeated 3+ times in the call DAG. This indicates the agent is stuck in a loop — calling the same tool with the same arguments repeatedly without making progress.
-                          </p>
-                        </div>
-                      )}
-                      {evidenceModal.rule === 'unauthorized_tool' && (
-                        <div className="border border-flame/20 bg-flame/5 p-4">
-                          <p className="font-mono text-[10px] text-flame/70 mb-2">Manifest allowlist violation</p>
-                          <p className="text-xs text-ash leading-relaxed">
-                            Agent called a tool not registered in its manifest. Each agent declares an allowlist of permitted tools. This call used a tool outside that list — either a misconfiguration or a jailbreak attempt escalating privileges.
-                          </p>
-                        </div>
-                      )}
-                      {!['prompt_injection','cost_explosion','repetition_loop','hallucinated_source','tool_loop','unauthorized_tool'].includes(evidenceModal.rule) && (
-                        <div className="border border-flame/20 bg-flame/5 p-4">
-                          <p className="font-mono text-[10px] text-flame/70 mb-2">Deterministic rule evaluation</p>
-                          <p className="text-xs text-ash leading-relaxed">
-                            Rule triggered through deterministic evaluation — no LLM in the verdict path. Same input always produces the same result.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* The span data */}
-                  <div>
-                    <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-ash/60 mb-3">Evidence span</p>
-                    <div className="border border-ash/10">
-                      <div className="px-4 py-3 border-b border-ash/10 bg-[#0A0A0A]">
-                        <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-ash/50 mb-1">Input prompt</p>
-                        <p className="font-mono text-xs text-bone/80 leading-relaxed whitespace-pre-wrap break-words">{evidenceData.input_text}</p>
-                      </div>
-                      <div className="px-4 py-3 bg-[#0A0A0A]">
-                        <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-ash/50 mb-1">Agent response</p>
-                        <p className="font-mono text-xs text-bone/80 leading-relaxed whitespace-pre-wrap break-words">{evidenceData.output_text}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Span metadata */}
-                  <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-ash/60 font-mono">
-                    <span>span_id: <span className="text-ash">{evidenceData.span_id}</span></span>
-                    <span>trace_id: <span className="text-ash">{evidenceData.trace_id}</span></span>
-                    <span>model: <span className="text-ash">{evidenceData.model}</span></span>
-                    <span>tokens: <span className="text-ash">{evidenceData.input_tokens}→{evidenceData.output_tokens}</span></span>
-                  </div>
-
-                  {/* Hallucination evidence */}
-                  {evidenceData.cited_docs.length > 0 && evidenceData.retrieved_docs.length > 0 && (
+          ) : evidenceData ? (
+            <div className="space-y-5">
+              {/* How it was caught */}
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-ash/60 mb-3">How it was caught</p>
+                <div className="grid grid-cols-1 gap-3">
+                  {evidenceModal.rule === 'prompt_injection' && (
                     <div className="border border-flame/20 bg-flame/5 p-4">
-                      <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-flame/70 mb-3">Hallucination proof — cited ≠ retrieved</p>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <p className="font-mono text-[9px] text-ash/50 mb-2">Agent cited these sources</p>
-                          {evidenceData.cited_docs.map((doc, i) => (
-                            <p key={i} className="font-mono text-[10px] text-flame/70 break-all mb-1">✗ {doc}</p>
-                          ))}
-                        </div>
-                        <div>
-                          <p className="font-mono text-[9px] text-ash/50 mb-2">Actually retrieved</p>
-                          {evidenceData.retrieved_docs.map((doc, i) => (
-                            <p key={i} className="font-mono text-[10px] text-ash/40 break-all mb-1">✓ {doc}</p>
-                          ))}
-                        </div>
-                      </div>
-                      <p className="text-xs text-ash/60 mt-3 leading-relaxed">
-                        The agent claimed sources that were never retrieved from any knowledge base. These citations were fabricated — a hallucination. The source URLs do not correspond to any document in the retrieval index.
+                      <p className="font-mono text-[10px] text-flame/70 mb-2">Regex pattern matching</p>
+                      <p className="text-xs text-ash leading-relaxed">
+                        Scanned input against 47 known injection vectors. Matched phrases like "ignore all instructions", "DAN", "developer mode", "system override" — patterns from the verazuo/jailbreak_llms dataset of 1,300+ real attack prompts scraped from Discord and Reddit.
                       </p>
                     </div>
                   )}
+                  {evidenceModal.rule === 'cost_explosion' && (
+                    <div className="border border-flame/20 bg-flame/5 p-4">
+                      <p className="font-mono text-[10px] text-flame/70 mb-2">Token count anomaly — {evidenceData.input_tokens + evidenceData.output_tokens} tokens vs baseline</p>
+                      <p className="text-xs text-ash leading-relaxed">
+                        Cost explosion triggers when token usage exceeds 3× the 7-day rolling average for this agent+model. This span's combined I/O tokens ({evidenceData.input_tokens + evidenceData.output_tokens}) significantly exceeded the expected range.
+                      </p>
+                    </div>
+                  )}
+                  {evidenceModal.rule === 'repetition_loop' && (
+                    <div className="border border-flame/20 bg-flame/5 p-4">
+                      <p className="font-mono text-[10px] text-flame/70 mb-2">N-gram similarity analysis</p>
+                      <p className="text-xs text-ash leading-relaxed">
+                        Compared consecutive output spans using Jaccard similarity on character n-grams. Threshold: &gt;80% similarity across 5+ consecutive spans triggers the rule.
+                      </p>
+                    </div>
+                  )}
+                  {evidenceModal.rule === 'hallucinated_source' && (
+                    <div className="border border-flame/20 bg-flame/5 p-4">
+                      <p className="font-mono text-[10px] text-flame/70 mb-2">Source attribution mismatch</p>
+                      <p className="text-xs text-ash leading-relaxed">
+                        Agent cited documents not found in the retrieval spans. Cited sources are cross-referenced against actually retrieved documents — a mismatch means the agent fabricated a reference.
+                      </p>
+                    </div>
+                  )}
+                  {evidenceModal.rule === 'tool_loop' && (
+                    <div className="border border-flame/20 bg-flame/5 p-4">
+                      <p className="font-mono text-[10px] text-flame/70 mb-2">Circular tool call detection</p>
+                      <p className="text-xs text-ash leading-relaxed">
+                        Detected the same (tool, args) pair repeated 3+ times in the call DAG. The agent is stuck in a loop without making progress.
+                      </p>
+                    </div>
+                  )}
+                  {evidenceModal.rule === 'unauthorized_tool' && (
+                    <div className="border border-flame/20 bg-flame/5 p-4">
+                      <p className="font-mono text-[10px] text-flame/70 mb-2">Manifest allowlist violation</p>
+                      <p className="text-xs text-ash leading-relaxed">
+                        Agent called a tool not registered in its manifest. Each agent declares an allowlist of permitted tools — this call used a tool outside that list.
+                      </p>
+                    </div>
+                  )}
+                  {!['prompt_injection','cost_explosion','repetition_loop','hallucinated_source','tool_loop','unauthorized_tool'].includes(evidenceModal.rule) && (
+                    <div className="border border-flame/20 bg-flame/5 p-4">
+                      <p className="font-mono text-[10px] text-flame/70 mb-2">Deterministic rule evaluation</p>
+                      <p className="text-xs text-ash leading-relaxed">
+                        Rule triggered through deterministic evaluation — no LLM in the verdict path. Same input always produces the same result.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
 
-                  {/* Data source attribution */}
-                  <div className="border-t border-ash/10 pt-4">
-                    <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ash/50 mb-2">Data source</p>
-                    <div className="text-xs text-ash/60 leading-relaxed space-y-1">
-                      {evidenceModal.rule === 'prompt_injection' && (
-                        <p>
-                          Prompt from{' '}
-                          <a href="https://github.com/verazuo/jailbreak_llms" target="_blank" rel="noopener noreferrer" className="text-flame/70 hover:text-flame underline">
-                            github.com/verazuo/jailbreak_llms
-                          </a>
-                          {' '}— 1,300+ real jailbreak prompts scraped from Discord and Reddit. 47 regex patterns match known injection vectors.
-                        </p>
-                      )}
-                      {evidenceModal.rule === 'hallucinated_source' && (
-                        <p>
-                          Question from{' '}
-                          <a href="https://github.com/sylinrl/TruthfulQA" target="_blank" rel="noopener noreferrer" className="text-flame/70 hover:text-flame underline">
-                            github.com/sylinrl/TruthfulQA
-                          </a>
-                          {' '}— 817 questions where LLMs consistently generate false answers. Cited source does not exist in retrieval index.
-                        </p>
-                      )}
-                      {(evidenceModal.rule === 'cost_explosion' || evidenceModal.rule === 'repetition_loop' || evidenceModal.rule === 'tool_loop' || evidenceModal.rule === 'unauthorized_tool' || evidenceModal.rule === 'empty_response' || evidenceModal.rule === 'latency_degradation' || evidenceModal.rule === 'embedding_drift') && (
-                        <p>
-                          Deterministic rule evaluation.{' '}
-                          <a href="https://github.com/subheeksh5599/Gaze/blob/main/backend/gaze/rules.py" target="_blank" rel="noopener noreferrer" className="text-flame/70 hover:text-flame underline">
-                            github.com/subheeksh5599/Gaze
-                          </a>
-                          {' '}— 35/35 tests passing, every rule tested positive + negative.
-                        </p>
-                      )}
-                      {!['prompt_injection','hallucinated_source','cost_explosion','repetition_loop','tool_loop','unauthorized_tool','embedding_drift','latency_degradation','empty_response'].includes(evidenceModal.rule) && (
-                        <p>
-                          Deterministic rule evaluation — 9 rules, no LLM in verdict path.{' '}
-                          <a href="https://github.com/subheeksh5599/Gaze" target="_blank" rel="noopener noreferrer" className="text-flame/70 hover:text-flame underline">
-                            github.com/subheeksh5599/Gaze
-                          </a>
-                        </p>
-                      )}
+              {/* The span data */}
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-ash/60 mb-3">Evidence span</p>
+                <div className="border border-ash/10">
+                  <div className="px-4 py-3 border-b border-ash/10 bg-[#0A0A0A]">
+                    <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-ash/50 mb-1">Input prompt</p>
+                    <p className="font-mono text-xs text-bone/80 leading-relaxed whitespace-pre-wrap break-words">{evidenceData.input_text}</p>
+                  </div>
+                  <div className="px-4 py-3 bg-[#0A0A0A]">
+                    <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-ash/50 mb-1">Agent response</p>
+                    <p className="font-mono text-xs text-bone/80 leading-relaxed whitespace-pre-wrap break-words">{evidenceData.output_text}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Span metadata */}
+              <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-ash/60 font-mono">
+                <span>span_id: <span className="text-ash">{evidenceData.span_id}</span></span>
+                <span>trace_id: <span className="text-ash">{evidenceData.trace_id}</span></span>
+                <span>model: <span className="text-ash">{evidenceData.model}</span></span>
+                <span>tokens: <span className="text-ash">{evidenceData.input_tokens}→{evidenceData.output_tokens}</span></span>
+              </div>
+
+              {/* Hallucination evidence */}
+              {evidenceData.cited_docs.length > 0 && evidenceData.retrieved_docs.length > 0 && (
+                <div className="border border-flame/20 bg-flame/5 p-4">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-flame/70 mb-3">Hallucination proof — cited ≠ retrieved</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="font-mono text-[9px] text-ash/50 mb-2">Agent cited these sources</p>
+                      {evidenceData.cited_docs.map((doc, i) => (
+                        <p key={i} className="font-mono text-[10px] text-flame/70 break-all mb-1">✗ {doc}</p>
+                      ))}
+                    </div>
+                    <div>
+                      <p className="font-mono text-[9px] text-ash/50 mb-2">Actually retrieved</p>
+                      {evidenceData.retrieved_docs.map((doc, i) => (
+                        <p key={i} className="font-mono text-[10px] text-ash/40 break-all mb-1">✓ {doc}</p>
+                      ))}
                     </div>
                   </div>
-
-                  {/* Verdict hash — proof of determinism */}
-                  <div className="border-t border-ash/10 pt-4">
-                    <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ash/50 mb-2">Deterministic proof</p>
-                    <p className="text-xs text-ash/60 leading-relaxed">
-                      This verdict is recomputable. Same trace snapshot + same rule set version + same agent ID = same sha256 hash. No LLM was involved in this decision. Anyone with the span data can verify independently.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <p className="font-mono text-sm text-ash mb-2">Span data unavailable</p>
-                  <p className="font-mono text-xs text-ash/60">The evidence span may have been cleared or the agent data was reset</p>
                 </div>
               )}
+
+              {/* Data source attribution */}
+              <div className="border-t border-ash/10 pt-4">
+                <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ash/50 mb-2">Data source</p>
+                <div className="text-xs text-ash/60 leading-relaxed space-y-1">
+                  {evidenceModal.rule === 'prompt_injection' && (
+                    <p>
+                      Prompt from{' '}
+                      <a href="https://github.com/verazuo/jailbreak_llms" target="_blank" rel="noopener noreferrer" className="text-flame/70 hover:text-flame underline">
+                        github.com/verazuo/jailbreak_llms
+                      </a>
+                      {' '}— 1,300+ real jailbreak prompts scraped from Discord and Reddit.
+                    </p>
+                  )}
+                  {evidenceModal.rule === 'hallucinated_source' && (
+                    <p>
+                      Question from{' '}
+                      <a href="https://github.com/sylinrl/TruthfulQA" target="_blank" rel="noopener noreferrer" className="text-flame/70 hover:text-flame underline">
+                        github.com/sylinrl/TruthfulQA
+                      </a>
+                      {' '}— 817 questions where LLMs consistently generate false answers.
+                    </p>
+                  )}
+                  {(evidenceModal.rule === 'cost_explosion' || evidenceModal.rule === 'repetition_loop' || evidenceModal.rule === 'tool_loop' || evidenceModal.rule === 'unauthorized_tool' || evidenceModal.rule === 'empty_response' || evidenceModal.rule === 'latency_degradation' || evidenceModal.rule === 'embedding_drift') && (
+                    <p>
+                      Deterministic rule evaluation.{' '}
+                      <a href="https://github.com/subheeksh5599/Gaze/blob/main/backend/gaze/rules.py" target="_blank" rel="noopener noreferrer" className="text-flame/70 hover:text-flame underline">
+                        github.com/subheeksh5599/Gaze
+                      </a>
+                      {' '}— 35/35 tests passing.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Deterministic proof */}
+              <div className="border-t border-ash/10 pt-4">
+                <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ash/50 mb-2">Deterministic proof</p>
+                <p className="text-xs text-ash/60 leading-relaxed">
+                  This verdict is recomputable. Same trace snapshot + same rule set version + same agent ID = same sha256 hash. No LLM was involved in this decision.
+                </p>
+              </div>
             </div>
-          </div>
-        </div>
+          ) : (
+            <div className="text-center py-8">
+              <p className="font-mono text-sm text-ash mb-2">Span data unavailable</p>
+              <p className="font-mono text-xs text-ash/60">The evidence span may have been cleared or the agent data was reset</p>
+            </div>
+          )}
+        </EvidenceDrawer>
       )}
     </main>
   );
