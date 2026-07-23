@@ -1,33 +1,15 @@
-import { Link, useLocation } from 'react-router-dom';
-import { useEffect, useRef } from 'react';
-import { animate } from 'animejs';
+import { Link, useLocation } from "react-router-dom";
 
 const links = [
-  { to: '/', label: 'Gaze' },
-  { to: '/dashboard', label: 'Dashboard' },
+  { to: "/", label: "Gaze" },
+  { to: "/dashboard", label: "Dashboard" },
 ];
 
 export default function Nav() {
   const location = useLocation();
-  const navRef = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    if (navRef.current) {
-      animate(navRef.current, {
-        translateY: [-40, 0],
-        opacity: [0, 1],
-        duration: 1000,
-        easing: 'easeOutExpo',
-        delay: 300,
-      });
-    }
-  }, []);
 
   return (
-    <nav
-      ref={navRef}
-      className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 py-6"
-    >
+    <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 py-6">
       <div className="flex items-center gap-8">
         {links.map((link) => (
           <Link
@@ -35,8 +17,8 @@ export default function Nav() {
             to={link.to}
             className={`font-mono text-xs uppercase tracking-[0.2em] transition-colors duration-300 ${
               location.pathname === link.to
-                ? 'text-flame'
-                : 'text-ash hover:text-bone'
+                ? "text-flame"
+                : "text-ash hover:text-bone"
             }`}
           >
             {link.label}
