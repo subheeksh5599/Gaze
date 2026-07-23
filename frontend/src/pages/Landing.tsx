@@ -605,6 +605,49 @@ function ArchitectureSection() {
   );
 }
 
+// ─── ProofSection (circle reveal) ──────────────────────────────────────────────
+
+function ProofSection() {
+  useGSAP(() => {
+    const tl = gsap.timeline({
+      scrollTrigger: {
+        trigger: ".proof-pin",
+        start: "-15% top",
+        end: "200% top",
+        scrub: 1.5,
+        pin: true,
+      },
+    });
+    tl.to(".proof-circle", {
+      clipPath: "circle(100% at 50% 50%)",
+      ease: "power1.inOut",
+    });
+  });
+
+  return (
+    <section className="proof-pin md:h-[110vh] h-dvh overflow-hidden md:!-translate-y-[15%] md:mt-0 mt-20 bg-ink">
+      <div
+        style={{ clipPath: "circle(6% at 50% 50%)" }}
+        className="size-full proof-circle"
+      >
+        <div className="size-full flex flex-col justify-center items-center gap-6 bg-surface">
+          <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+            <path d="M32 8 L32 14 C32 16 30 17 26 17 L26 26 C26 28 28 30 32 30 C36 30 38 28 38 26 L38 17 C34 17 32 16 32 14Z" stroke="#FF4D00" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
+            <rect x="22" y="16" width="20" height="22" rx="4" stroke="#FF4D00" strokeWidth="2" fill="#FF4D00" fillOpacity="0.08"/>
+            <path d="M32 26 L32 30" stroke="#FF4D00" strokeWidth="2" strokeLinecap="round"/>
+            <circle cx="32" cy="33" r="2" fill="#FF4D00"/>
+          </svg>
+          <p className="text-flame font-mono text-sm tracking-widest uppercase">Deterministic Proof</p>
+          <p className="text-ash/60 font-mono text-xs max-w-xs text-center">
+            No LLM in the verdict path. Same input always produces the same
+            sha256 hash. Recomputable by anyone, anywhere.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ─── VerdictSection ─────────────────────────────────────────────────────────────
 
 function VerdictSection() {
@@ -766,6 +809,7 @@ export default function Landing() {
           <RulesSection />
           <PipelineSection />
           <ArchitectureSection />
+          <ProofSection />
           <VerdictSection />
           <FooterSection />
         </div>
