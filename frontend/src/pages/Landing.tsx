@@ -532,18 +532,21 @@ function PipelineSection() {
 
 function ArchitectureSection() {
   useGSAP(() => {
-    gsap.to(".arch-title-row", {
-      duration: 1,
-      opacity: 1,
-      clipPath: "polygon(0% 0%, 100% 0, 100% 100%, 0% 100%)",
-      ease: "circ.out",
-      stagger: 0.3,
+    const revealTl = gsap.timeline({
+      delay: 1,
       scrollTrigger: {
         trigger: ".arch-section",
         start: "top 60%",
         end: "top top",
         scrub: 1.5,
       },
+    });
+    revealTl.to(".arch-title-row", {
+      duration: 1,
+      opacity: 1,
+      clipPath: "polygon(0% 0%, 100% 0, 100% 100%, 0% 100%)",
+      ease: "circ.out",
+      stagger: 0.3,
     });
 
     // Circle reveal animation
