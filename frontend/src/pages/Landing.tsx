@@ -627,7 +627,7 @@ function ProofSection() {
   return (
     <section className="proof-pin md:h-[110vh] h-dvh overflow-hidden md:!-translate-y-[15%] md:mt-0 mt-20 bg-ink">
       <div
-        style={{ clipPath: "circle(6% at 50% 50%)" }}
+        style={{ clipPath: "circle(28% at 50% 50%)" }}
         className="size-full proof-circle"
       >
         <div className="size-full flex flex-col justify-center items-center gap-6 bg-surface">
