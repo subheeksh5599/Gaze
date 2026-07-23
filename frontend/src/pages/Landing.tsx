@@ -549,7 +549,7 @@ function ArchitectureSection() {
       stagger: 0.3,
     });
 
-    // Circle reveal animation
+    // Circle reveal animation — single timeline for both circle + ring
     gsap.timeline({
       scrollTrigger: {
         trigger: ".proof-pin",
@@ -558,23 +558,15 @@ function ArchitectureSection() {
         scrub: 2,
         pin: true,
       },
-    }).to(".proof-circle", {
-      clipPath: "circle(100% at 50% 50%)",
-      ease: "power1.inOut",
-    });
-    // Ring expands in sync with the circle
-    gsap.timeline({
-      scrollTrigger: {
-        trigger: ".proof-pin",
-        start: "-15% top",
-        end: "350% top",
-        scrub: 2,
-        pin: true,
-      },
-    }).to(".proof-ring", {
-      width: "100%",
-      ease: "power1.inOut",
-    });
+    })
+      .to(".proof-circle", {
+        clipPath: "circle(100% at 50% 50%)",
+        ease: "power1.inOut",
+      }, 0)
+      .to(".proof-ring", {
+        width: "100%",
+        ease: "power1.inOut",
+      }, 0);
   });
 
   const titles = [
