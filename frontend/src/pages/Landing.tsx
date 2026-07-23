@@ -554,12 +554,25 @@ function ArchitectureSection() {
       scrollTrigger: {
         trigger: ".proof-pin",
         start: "-15% top",
-        end: "200% top",
-        scrub: 1.5,
+        end: "350% top",
+        scrub: 2,
         pin: true,
       },
     }).to(".proof-circle", {
       clipPath: "circle(100% at 50% 50%)",
+      ease: "power1.inOut",
+    });
+    // Ring expands in sync with the circle
+    gsap.timeline({
+      scrollTrigger: {
+        trigger: ".proof-pin",
+        start: "-15% top",
+        end: "350% top",
+        scrub: 2,
+        pin: true,
+      },
+    }).to(".proof-ring", {
+      width: "100%",
       ease: "power1.inOut",
     });
   });
@@ -622,9 +635,13 @@ function ArchitectureSection() {
       {/* Circle reveal — expands as you scroll deeper */}
       <div className="relative overlay-box mt-10 md:mt-0">
         <div className="proof-pin md:h-[110vh] h-dvh overflow-hidden md:!-translate-y-[15%] md:mt-0 mt-20">
+          {/* Visible ring behind the expanding circle */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+            <div className="rounded-full border border-flame/20 w-[12%] h-auto aspect-square proof-ring" />
+          </div>
           <div
-            style={{ clipPath: "circle(28% at 50% 50%)" }}
-            className="size-full proof-circle"
+            style={{ clipPath: "circle(12% at 50% 50%)" }}
+            className="size-full proof-circle relative z-10"
           >
             <div className="size-full flex flex-col justify-center items-center gap-6 bg-surface">
               <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
